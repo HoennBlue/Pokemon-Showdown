@@ -1034,7 +1034,7 @@ export const commands: ChatCommands = {
 		}
 
 		const options = (target === 'forpunishment' || target === 'silent') ? target : undefined;
-		await room.uploadReplay(user, connection, options);
+		await (room as GameRoom).uploadReplay(user, connection, options);
 	},
 
 	hidereplay(target, room, user, connection) {
@@ -1053,7 +1053,7 @@ export const commands: ChatCommands = {
 		if (!room) return this.requiresRoom();
 		if (!target) return this.parse('/help addplayer');
 		if (!room.battle) return this.errorReply("You can only do this in battle rooms.");
-		if (room.rated) return this.errorReply("You can only add a Player to unrated battles.");
+		if ((room as GameRoom).rated) return this.errorReply("You can only add a Player to unrated battles.");
 
 		target = this.splitTarget(target, true).trim();
 		if (target !== 'p1' && target !== 'p2') {
@@ -1093,7 +1093,7 @@ export const commands: ChatCommands = {
 	restoreplayers(target, room, user) {
 		if (!room) return this.requiresRoom();
 		if (!room.battle) return this.errorReply("You can only do this in battle rooms.");
-		if (room.rated) return this.errorReply("You can only add a Player to unrated battles.");
+		if ((room as GameRoom).rated) return this.errorReply("You can only add a Player to unrated battles.");
 
 		let didSomething = false;
 		if (!room.battle.p1.id && room.battle.p1.name !== 'Player 1') {
@@ -1282,8 +1282,8 @@ export const commands: ChatCommands = {
 		if (!user.named) {
 			return this.popupReply(`You must choose a username before you challenge someone.`);
 		}
-		if (Config.pmmodchat && !user.hasSysopAccess() && !Users.globalAuth.atLeast(user, Config.pmmodchat as GroupSymbol)) {
-			const groupName = Config.groups[Config.pmmodchat].name || Config.pmmodchat;
+		if (Config.laddermodchat && !user.hasSysopAccess() && !Users.globalAuth.atLeast(user, Config.laddermodchat as AuthLevel)) {
+			const groupName = Config.groups[Config.laddermodchat]?.name || Config.laddermodchat;
 			this.popupReply(`This server requires you to be rank ${groupName} or higher to challenge users.`);
 			return false;
 		}
@@ -1342,9 +1342,11 @@ export const commands: ChatCommands = {
 	},
 
 	vtm(target, room, user, connection) {
+		/*
 		if (Monitor.countPrepBattle(connection.ip, connection)) {
 			return;
 		}
+		*/
 		if (!target) return this.errorReply("Provide a valid format.");
 		const originalFormat = Dex.getFormat(target);
 		// Note: The default here of [Gen 8] Anything Goes isn't normally hit; since the web client will send a default format

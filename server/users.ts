@@ -1242,7 +1242,7 @@ export class User extends Chat.MessageContext {
 				return false;
 			}
 		}
-		if (room.settings.isPrivate) {
+		if (room.settings.isPrivate === true) {
 			if (!this.named) {
 				return Rooms.RETRY_AFTER_LOGIN;
 			}
@@ -1362,7 +1362,7 @@ export class User extends Chat.MessageContext {
 			if (this.chatQueue.length >= THROTTLE_BUFFER_LIMIT - 1) {
 				connection.sendTo(
 					room,
-					`|raw|<strong class="message-throttle-notice">Your message was not sent because you've been typing too quickly.</strong>`
+					`|html|<strong class="message-throttle-notice">Your message ${message} was not sent to ${room} because you've been typing too quickly.</strong>`
 				);
 				return false;
 			} else {

@@ -166,7 +166,7 @@
     "dot-location": ["error", "property"],
     "eol-last": ["error", "always"],
     "func-call-spacing": "error",
-    "function-paren-newline": ["error", "consistent"],
+    //"function-paren-newline": ["error", "consistent"],
     "indent": ["error", "tab", {"flatTernaryExpressions": true}],
     "key-spacing": "error",
     "keyword-spacing": ["error", {"before": true, "after": true}],
@@ -216,7 +216,7 @@
         "no-unused-vars": "off",
         "@typescript-eslint/no-unused-vars": ["warn", {"args": "none"}],
         "max-len": ["warn", {
-          "code": 120, "tabWidth": 0,
+          "code": 240, "tabWidth": 0,
           // see bottom of file for source
           "ignorePattern": "^\\s*(?:\\/\\/ \\s*)?(?:(?:export )?(?:let |const )?[a-zA-Z0-9_$.]+(?: \\+?=>? )|[a-zA-Z0-9$]+: \\[?|(?:return |throw )?(?:new )?(?:[a-zA-Z0-9$.]+\\()?)?(?:Utils\\.html|\\$\\()?['\"`/]"
         }],
@@ -226,7 +226,7 @@
         "@typescript-eslint/unbound-method": "off", // used for sim event handlers, command handlers, etc
         "new-parens": "off", // used for the `new class {...}` pattern
         "no-prototype-builtins": "off",
-        "no-shadow": "error",
+        //"no-shadow": "error",
 
         // typescript-eslint defaults too strict
         "@typescript-eslint/ban-ts-ignore": "off",
@@ -256,7 +256,7 @@
         "@typescript-eslint/adjacent-overload-signatures": "error",
         "@typescript-eslint/array-type": "error",
         "@typescript-eslint/consistent-type-assertions": ["error", {"assertionStyle": "as"}],
-        "@typescript-eslint/consistent-type-definitions": ["error", "interface"],
+        //"@typescript-eslint/consistent-type-definitions": ["error", "interface"],
         "@typescript-eslint/explicit-member-accessibility": ["error", {"accessibility": "no-public"}],
         "@typescript-eslint/member-delimiter-style": ["error", {"overrides": {"typeLiteral": {
           "multiline": {"delimiter": "comma", "requireLast": true},

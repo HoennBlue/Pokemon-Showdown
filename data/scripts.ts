@@ -106,7 +106,7 @@ export const Scripts: BattleScriptsData = {
 			const dancers = [];
 			for (const currentPoke of this.getAllActive()) {
 				if (pokemon === currentPoke) continue;
-				if (currentPoke.hasAbility('dancer') && !currentPoke.isSemiInvulnerable()) {
+				if (currentPoke.hasAbility('dancer') && this.runEvent('Invulnerability', currentPoke, currentPoke, move) !== false) {
 					dancers.push(currentPoke);
 				}
 			}
@@ -148,21 +148,14 @@ export const Scripts: BattleScriptsData = {
 	},
 	useMoveInner(moveOrMoveName, pokemon, target, sourceEffect, zMove, maxMove) {
 		if (!sourceEffect && this.effect.id) sourceEffect = this.effect;
-		if (sourceEffect && ['instruct', 'custapberry'].includes(sourceEffect.id)) sourceEffect = null;
-
 		let move = this.dex.getActiveMove(moveOrMoveName);
-		if (move.id === 'weatherball' && zMove) {
-			// Z-Weather Ball only changes types if it's used directly,
-			// not if it's called by Z-Sleep Talk or something.
-			this.singleEvent('ModifyType', move, null, pokemon, target, move, move);
-			if (move.type !== 'Normal') sourceEffect = move;
-		}
 		if (zMove || (move.category !== 'Status' && sourceEffect && (sourceEffect as ActiveMove).isZ)) {
 			move = this.getActiveZMove(move, pokemon);
 		}
 		if (maxMove && move.category !== 'Status') {
 			// Max move outcome is dependent on the move type after type modifications from ability and the move itself
 			this.singleEvent('ModifyType', move, null, pokemon, target, move, move);
+			// This doesn't work for Liquid Voice because we're passing the original move, which might be a sound-based move
 			this.runEvent('ModifyType', pokemon, target, move, move);
 		}
 		if (maxMove || (move.category !== 'Status' && sourceEffect && (sourceEffect as ActiveMove).isMax)) {
@@ -196,12 +189,12 @@ export const Scripts: BattleScriptsData = {
 		}
 		move = this.runEvent('ModifyType', pokemon, target, move, move);
 		move = this.runEvent('ModifyMove', pokemon, target, move, move);
+		if (!move || pokemon.fainted) {
+			return false;
+		}
 		if (baseTarget !== move.target) {
 			// Adjust again
 			target = this.getRandomTarget(pokemon, move);
-		}
-		if (!move || pokemon.fainted) {
-			return false;
 		}
 
 		let attrs = '';
@@ -209,13 +202,10 @@ export const Scripts: BattleScriptsData = {
 		let movename = move.name;
 		if (move.id === 'hiddenpower') movename = 'Hidden Power';
 		if (sourceEffect) attrs += '|[from]' + this.dex.getEffect(sourceEffect);
-		if (zMove && move.isZ === true) {
-			attrs = '|[anim]' + movename + attrs;
-			movename = 'Z-' + movename;
-		}
-		this.addMove('move', pokemon, movename, target + attrs);
-
+		if (zMove) attrs += '|[zeffect]';
+		if (zMove && move.isZ === true) attrs = '|[anim]' + movename.slice(2) + attrs;
 		if (zMove) this.runZPower(move, pokemon);
+		this.addMove('move', pokemon, movename, target + attrs);
 
 		if (!target) {
 			this.attrLastMove('[notarget]');
@@ -273,7 +263,6 @@ export const Scripts: BattleScriptsData = {
 			}
 			moveResult = this.trySpreadMoveHit(targets, pokemon, move);
 		}
-		if (move.selfBoost && moveResult) this.moveHit(pokemon, pokemon, move, move.selfBoost, false, true);
 		if (!pokemon.hp) {
 			this.faint(pokemon, pokemon, move);
 		}
@@ -449,7 +438,7 @@ export const Scripts: BattleScriptsData = {
 			if (move.ohko) { // bypasses accuracy modifiers
 				if (!target.isSemiInvulnerable()) {
 					accuracy = 30;
-					if (move.ohko === 'Ice' && this.gen >= 7 && !pokemon.hasType('Ice')) {
+					if (move.ohko !== true && !pokemon.hasType(move.ohko)) {
 						accuracy = 20;
 					}
 					if (!target.volatiles['dynamax'] && pokemon.level >= target.level &&
@@ -761,9 +750,6 @@ export const Scripts: BattleScriptsData = {
 		return damage;
 	},
 	spreadMoveHit(targets, pokemon, moveOrMoveName, moveData, isSecondary, isSelf) {
-		// Hardcoded for single-target purposes
-		// (no spread moves have any kind of onTryHit handler)
-		const target = targets[0];
 		let damage: (number | boolean | undefined)[] = [];
 		for (const i of targets.keys()) {
 			damage[i] = true;
@@ -773,11 +759,15 @@ export const Scripts: BattleScriptsData = {
 		if (!moveData) moveData = move;
 		if (!moveData.flags) moveData.flags = {};
 		if (move.target === 'all' && !isSelf) {
-			hitResult = this.singleEvent('TryHitField', moveData, {}, target || null, pokemon, move);
+			hitResult = this.singleEvent('TryHitField', moveData, {}, targets[0] || null, pokemon, move);
 		} else if ((move.target === 'foeSide' || move.target === 'allySide') && !isSelf) {
-			hitResult = this.singleEvent('TryHitSide', moveData, {}, (target ? target.side : null), pokemon, move);
-		} else if (target) {
-			hitResult = this.singleEvent('TryHit', moveData, {}, target, pokemon, move);
+			hitResult = this.singleEvent('TryHitSide', moveData, {}, targets[0] || null, pokemon, move);
+		} else {
+			for (const [i, target] of targets.entries()) {
+				damage[i] = this.singleEvent('TryHit', moveData, {}, target || null, pokemon || null, move);
+				if (!damage[i]) targets[i] = false;
+			}
+			if (damage.every(val => val === false)) hitResult = false;
 		}
 		if (!hitResult) {
 			if (hitResult === false) {
@@ -815,10 +805,7 @@ export const Scripts: BattleScriptsData = {
 		damage = this.spreadDamage(damage, targets, pokemon, move);
 
 		for (const i of targets.keys()) {
-			if (!damage && damage !== 0) {
-				this.debug('damage interrupted');
-				targets[i] = false;
-			}
+			if (damage[i] === false) targets[i] = false;
 		}
 
 		// 3. onHit event happens here
@@ -936,7 +923,7 @@ export const Scripts: BattleScriptsData = {
 						continue;
 					}
 					const amount = target.baseMaxhp * moveData.heal[0] / moveData.heal[1];
-					const d = target.heal((this.gen < 5 ? Math.floor : Math.round)(amount));
+					const d = this.heal((this.gen < 5 ? Math.floor : Math.round)(amount), target, pokemon, move);
 					if (!d && d !== 0) {
 						this.add('-fail', pokemon);
 						this.attrLastMove('[still]');
@@ -945,11 +932,10 @@ export const Scripts: BattleScriptsData = {
 						didAnything = this.combineResults(didAnything, null);
 						continue;
 					}
-					this.add('-heal', target, target.getHealth);
 					didSomething = true;
 				}
 				if (moveData.status) {
-					hitResult = target.trySetStatus(moveData.status, pokemon, moveData.ability ? moveData.ability : move);
+					hitResult = target.trySetStatus(moveData.status, pokemon, moveData.ability ? moveData.ability : move, move.ignoreStatusImmunity && move.ignoreStatusImmunity[moveData.status]);
 					if (!hitResult && move.status) {
 						damage[i] = this.combineResults(damage[i], false);
 						didAnything = this.combineResults(didAnything, null);
@@ -958,7 +944,7 @@ export const Scripts: BattleScriptsData = {
 					didSomething = this.combineResults(didSomething, hitResult);
 				}
 				if (moveData.forceStatus) {
-					hitResult = target.setStatus(moveData.forceStatus, pokemon, move);
+					hitResult = target.setStatus(moveData.forceStatus, pokemon, move, move.ignoreStatusImmunity && move.ignoreStatusImmunity[moveData.forceStatus]);
 					didSomething = this.combineResults(didSomething, hitResult);
 				}
 				if (moveData.volatileStatus) {
@@ -1127,7 +1113,7 @@ export const Scripts: BattleScriptsData = {
 		if (item.zMoveFrom) {
 			if (move.name === item.zMoveFrom) return item.zMove as string;
 		} else if (item.zMove === true) {
-			if (move.type === item.zMoveType) {
+			if (!skipChecks || move.type === item.zMoveType) {
 				if (move.category === "Status") {
 					return move.name;
 				} else if (move.zMove?.basePower) {
@@ -1143,15 +1129,14 @@ export const Scripts: BattleScriptsData = {
 			if (move.name === item.zMoveFrom) {
 				// @ts-ignore
 				const zMove = this.dex.getActiveMove(item.zMove);
-				zMove.isZOrMaxPowered = true;
 				return zMove;
 			}
 		}
 
 		if (move.category === 'Status') {
 			const zMove = this.dex.getActiveMove(move);
+			if (!zMove.isZ) (zMove as any).name = 'Z-' + zMove.name;
 			zMove.isZ = true;
-			zMove.isZOrMaxPowered = true;
 			return zMove;
 		}
 		const zMove = this.dex.getActiveMove(this.zMoveTable[move.type]);
@@ -1159,7 +1144,6 @@ export const Scripts: BattleScriptsData = {
 		zMove.category = move.category;
 		// copy the priority for Quick Guard
 		zMove.priority = move.priority;
-		zMove.isZOrMaxPowered = true;
 		return zMove;
 	},
 
@@ -1183,15 +1167,13 @@ export const Scripts: BattleScriptsData = {
 				mustStruggle = false;
 			}
 			const move = this.dex.getMove(moveSlot.move);
-			let zMoveName = this.getZMove(move, pokemon, true) || '';
-			if (zMoveName) {
-				const zMove = this.dex.getMove(zMoveName);
-				if (!zMove.isZ && zMove.category === 'Status') zMoveName = "Z-" + zMoveName;
-				zMoves.push({move: zMoveName, target: zMove.target});
+			if (this.getZMove(move, pokemon, true)) {
+				const zMove = this.getActiveZMove(move, pokemon);
+				zMoves.push({move: zMove.name, target: zMove.target, basePower: zMove.basePower, category: zMove.category});
+				atLeastOne = true;
 			} else {
 				zMoves.push(null);
 			}
-			if (zMoveName) atLeastOne = true;
 		}
 		if (atLeastOne && !mustStruggle) return zMoves;
 	},
@@ -1287,7 +1269,7 @@ export const Scripts: BattleScriptsData = {
 			}
 		}
 
-		pokemon.formeChange(speciesid, pokemon.getItem(), true);
+		pokemon.formeChange(speciesid, speciesid === 'Rayquaza-Mega' ? this.dex.getItem('dragonascent') : pokemon.getItem(), true);
 
 		// Limit one mega evolution
 		const wasMega = pokemon.canMegaEvo;
@@ -1305,9 +1287,7 @@ export const Scripts: BattleScriptsData = {
 
 	runZPower(move, pokemon) {
 		const zPower = this.dex.getEffect('zpower');
-		if (move.category !== 'Status') {
-			this.attrLastMove('[zeffect]');
-		} else if (move.zMove?.boost) {
+		if (move.zMove?.boost) {
 			this.boost(move.zMove.boost, pokemon, pokemon, zPower);
 		} else if (move.zMove?.effect) {
 			switch (move.zMove.effect) {
@@ -1315,7 +1295,7 @@ export const Scripts: BattleScriptsData = {
 				this.heal(pokemon.maxhp, pokemon, pokemon, zPower);
 				break;
 			case 'healreplacement':
-				move.self = {slotCondition: 'healreplacement'};
+				pokemon.side.addSlotCondition(pokemon, 'healreplacement', pokemon, move);
 				break;
 			case 'clearnegativeboost':
 				const boosts: SparseBoostsTable = {};

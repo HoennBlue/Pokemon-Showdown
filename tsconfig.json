@@ -6,6 +6,7 @@
         "module": "commonjs",
         "moduleResolution": "node",
         "strict": true,
+        "strictNullChecks": false,
         "allowJs": true,
         "checkJs": true
     },

@@ -14,7 +14,7 @@
 import {execSync} from "child_process";
 import {FS} from "../lib/fs";
 import {Utils} from '../lib/utils';
-import {StreamProcessManager} from "../lib/process-manager";
+import {StreamProcessManager, SubprocessStream} from "../lib/process-manager";
 import {Repl} from "../lib/repl";
 import {BattleStream} from "../sim/battle-stream";
 import * as RoomGames from "./room-game";
@@ -470,7 +470,7 @@ export class RoomBattle extends RoomGames.RoomGame {
 	 * userid that requested extraction -> playerids that accepted the extraction
 	 */
 	readonly allowExtraction: {[k: string]: Set<ID>};
-	readonly stream: Streams.ObjectReadWriteStream<string>;
+	readonly stream: SubprocessStream;
 	readonly timer: RoomBattleTimer;
 	missingBattleStartMessage: boolean;
 	started: boolean;
@@ -538,7 +538,7 @@ export class RoomBattle extends RoomGames.RoomGame {
 		this.rqid = 1;
 		this.requestCount = 0;
 
-		this.stream = PM.createStream();
+		this.stream = PM.createStream() as SubprocessStream;
 
 		let ratedMessage = '';
 		if (options.ratedMessage) {
@@ -719,7 +719,7 @@ export class RoomBattle extends RoomGames.RoomGame {
 			}
 		}
 		if (!this.ended) {
-			this.room.add(`|bigerror|The simulator process crashed. We've been notified and will fix this ASAP.`);
+			this.room.add(`|bigerror|The simulator process crashed. Please report the error so that it can be fixed.`);
 			if (!disconnected) Monitor.crashlog(new Error(`Sim stream interrupted`), `A sim stream`);
 			this.started = true;
 			this.ended = true;
@@ -790,6 +790,13 @@ export class RoomBattle extends RoomGames.RoomGame {
 				this.clearPlayers();
 			}
 			this.checkActive();
+			break;
+
+		case 'evalbattle':
+			// @ts-ignore
+			this.evalbattle = lines;
+			const user = Users.get(lines[1]);
+			user?.sendTo(this.roomid, lines.slice(2).join('\n'));
 			break;
 		}
 	}
@@ -1179,7 +1186,7 @@ export class RoomBattleStream extends BattleStream {
 				log: battle ? '\n' + battle.getDebugLog() : '',
 			});
 
-			this.push(`update\n|html|<div class="broadcast-red"><b>The battle crashed</b><br />Don't worry, we're working on fixing it.</div>`);
+			this.push(`update\n|html|<div class="broadcast-red"><b>The battle crashed</b><br />Please report the error so that it can be fixed.</div>`);
 			if (battle) {
 				for (const side of battle.sides) {
 					if (side?.requestState) {
@@ -1207,7 +1214,7 @@ export class RoomBattleStream extends BattleStream {
 		case 'requestlog':
 			this.push(`requesteddata\n${this.battle.inputLog.join('\n')}`);
 			break;
-		case 'eval':
+		case 'eval': {
 			const battle = this.battle;
 			battle.inputLog.push(`>${type} ${message}`);
 			message = message.replace(/\f/g, '\n');
@@ -1243,6 +1250,44 @@ export class RoomBattleStream extends BattleStream {
 				battle.add('', '<<< error: ' + e.message);
 			}
 			break;
+		}
+		case 'evalbattle': {
+			/* eslint-disable no-eval, @typescript-eslint/no-unused-vars */
+			const battle = this.battle;
+			const p1 = battle?.sides[0];
+			const p2 = battle?.sides[1];
+			const p3 = battle?.sides[2];
+			const p4 = battle?.sides[3];
+			const p1active = p1?.active[0];
+			const p2active = p2?.active[0];
+			const p3active = p3?.active[0];
+			const p4active = p4?.active[0];
+			let user: string;
+			[user, message] = Utils.splitFirst(message, ' ');
+			message = message.replace(/\f/g, '\n');
+			this.push(`evalbattle\n${user}\n>>> ${message.replace(/\n/g, '\n||')}`);
+			try {
+				// tslint:disable-next-line: no-eval
+				let result = eval(message);
+				if (result?.then) {
+					result.then((unwrappedResult: any) => {
+						unwrappedResult = Utils.visualize(unwrappedResult);
+						unwrappedResult = unwrappedResult.replace(/\n/g, '\n||');
+						this.push(`evalbattle\n${user}\n<<< Promise -> ${unwrappedResult}`);
+					}, (error: Error) => {
+						this.push(`evalbattle\n${user}\n<<< error: ${error.message}`);
+					});
+				} else {
+					result = Utils.visualize(result);
+					result = result.replace(/\n/g, '\n||');
+					this.push(`evalbattle\n${user}\n<<< ${result}`);
+				}
+			} catch (e) {
+				this.push(`evalbattle\n${user}\n<<< error: ${e.message}`);
+			}
+			/* eslint-enable no-eval, @typescript-eslint/no-unused-vars */
+			break;
+		}
 		case 'requestteam':
 			message = message.trim();
 			const slotNum = parseInt(message.slice(1)) - 1;

@@ -22,7 +22,7 @@ const ROOT_DIR = path.resolve(__dirname, '..');
 export const processManagers: ProcessManager[] = [];
 export const disabled = false;
 
-class SubprocessStream extends Streams.ObjectReadWriteStream<string> {
+export class SubprocessStream extends Streams.ObjectReadWriteStream<string> {
 	process: StreamProcessWrapper;
 	taskId: number;
 	constructor(process: StreamProcessWrapper, taskId: number) {
@@ -226,6 +226,7 @@ export class StreamProcessWrapper implements ProcessWrapper {
 	deleteStream(taskId: number) {
 		this.activeStreams.delete(taskId);
 		// try to release
+		// tslint:disable-next-line:no-floating-promises
 		if (this.resolveRelease && !this.load) void this.destroy();
 	}
 
@@ -244,6 +245,7 @@ export class StreamProcessWrapper implements ProcessWrapper {
 	release(): Promise<void> {
 		if (this.pendingRelease) return this.pendingRelease;
 		if (!this.load) {
+			// tslint:disable-next-line:no-floating-promises
 			void this.destroy();
 		} else {
 			this.pendingRelease = new Promise(resolve => {
@@ -321,7 +323,7 @@ export class RawProcessWrapper implements ProcessWrapper, StreamWorker {
 	}
 
 	getProcess() {
-		return this.process.process ? this.process.process : this.process;
+		return (this.process.process ? this.process.process : this.process);
 	}
 
 	release(): Promise<void> {
@@ -470,7 +472,14 @@ export class QueryProcessManager<T = string, U = string> extends ProcessManager 
 	query(input: T) {
 		const process = this.acquire() as QueryProcessWrapper;
 		if (!process) return Promise.resolve(this._query(input));
-		return process.query(input);
+		try {
+			return process.query(input);
+		} catch (e) {
+		}
+		const newProcess = this.createProcess();
+		const result = process.query(input);
+		this.processes[this.processes.indexOf(process)] = newProcess;
+		return result;
 	}
 	createProcess() {
 		return new QueryProcessWrapper(this.filename);
@@ -516,7 +525,14 @@ export class StreamProcessManager extends ProcessManager {
 	createStream() {
 		const process = this.acquire() as StreamProcessWrapper;
 		if (!process) return this._createStream();
-		return process.createStream();
+		try {
+			return process.createStream();
+		} catch (e) {
+		}
+		const newProcess = this.createProcess();
+		const stream = newProcess.createStream();
+		this.processes[this.processes.indexOf(process)] = newProcess;
+		return stream;
 	}
 	createProcess() {
 		return new StreamProcessWrapper(this.filename);

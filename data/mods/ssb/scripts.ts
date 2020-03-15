@@ -95,13 +95,15 @@ export const Scripts: ModdedBattleScriptsData = {
 			// Note that the speed stat used is after any volatile replacements like Speed Swap,
 			// but before any multipliers like Agility or Choice Scarf
 			// Ties go to whichever Pokemon has had the ability for the least amount of time
-			dancers.sort(
-				(a, b) => -(b.storedStats['spe'] - a.storedStats['spe']) || b.abilityOrder - a.abilityOrder
+			dancers.sort((a, b) =>
+				-(b.storedStats['spe'] - a.storedStats['spe']) || b.abilityOrder - a.abilityOrder
 			);
 			for (const dancer of dancers) {
 				if (this.faintMessages()) break;
 				this.add('-activate', dancer, 'ability: Dancer');
 				this.runMove(move.id, dancer, 0, this.dex.getAbility('dancer'), undefined, true);
+				// Using a Dancer move is enough to spoil Fake Out etc.
+				dancer.activeTurns++;
 			}
 		}
 		if (noLock && pokemon.volatiles.lockedmove) delete pokemon.volatiles.lockedmove;
@@ -234,7 +236,7 @@ export const Scripts: ModdedBattleScriptsData = {
 			if (zMoveName) {
 				const zMove = this.dex.getMove(zMoveName);
 				if (!zMove.isZ && zMove.category === 'Status') zMoveName = "Z-" + zMoveName;
-				zMoves.push({move: zMoveName, target: zMove.target});
+				zMoves.push({move: zMove.name, target: zMove.target, basePower: zMove.basePower, category: zMove.category});
 			} else {
 				zMoves.push(null);
 			}

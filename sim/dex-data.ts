@@ -206,7 +206,7 @@ export class RuleTable extends Map<string, string> {
 		if (this.has(`*pokemon:${species.id}`)) return true;
 		if (this.has(`+basepokemon:${toID(species.baseSpecies)}`)) return false;
 		if (this.has(`*basepokemon:${toID(species.baseSpecies)}`)) return true;
-		const tier = species.tier === '(PU)' ? 'ZU' : species.tier === '(NU)' ? 'PU' : species.tier;
+		const tier = species.tier === 'AG' ? 'Uber' : species.tier === '(PU)' ? 'ZU' : species.tier === '(NU)' ? 'PU' : species.tier;
 		if (this.has(`+pokemontag:${toID(tier)}`)) return false;
 		if (this.has(`*pokemontag:${toID(tier)}`)) return true;
 		const doublesTier = species.doublesTier === '(DUU)' ? 'DNU' : species.doublesTier;
@@ -373,7 +373,7 @@ export class Condition extends BasicEffect implements Readonly<BasicEffect & Con
 	constructor(data: AnyObject, ...moreData: (AnyObject | null)[]) {
 		super(data, ...moreData);
 		data = this;
-		this.effectType = (['Weather', 'Status'].includes(data.effectType) ? data.effectType : 'Condition');
+		this.effectType = data.effectType || 'Condition';
 	}
 }
 
@@ -719,6 +719,11 @@ export class Species extends BasicEffect implements Readonly<BasicEffect & Speci
 	readonly comboMoves?: readonly ID[];
 	readonly essentialMove?: ID;
 	readonly randomSets?: readonly RandomTeamsTypes.Gen2RandomSet[];
+	// oms
+	readonly innate?: string;
+	readonly originalMega?: string;
+	readonly stallingMove?: boolean;
+	readonly inheritedItem?: string;
 
 	constructor(data: AnyObject, ...moreData: (AnyObject | null)[]) {
 		super(data, ...moreData);
@@ -767,11 +772,13 @@ export class Species extends BasicEffect implements Readonly<BasicEffect & Speci
 		this.canGigantamax = data.canGigantamax || undefined;
 		this.gmaxUnreleased = !!data.gmaxUnreleased;
 		this.cannotDynamax = !!data.cannotDynamax;
-		this.battleOnly = data.battleOnly || (this.isMega ? this.baseSpecies : undefined);
+		this.battleOnly = data.battleOnly;
 		this.changesFrom = data.changesFrom ||
 			(this.battleOnly !== this.baseSpecies ? this.battleOnly : this.baseSpecies);
 
 		if (!this.gen && this.num >= 1) {
+			// For Megamons
+			this.battleOnly = this.battleOnly || this.isMega && this.baseSpecies || undefined;
 			if (this.num >= 810 || ['Gmax', 'Galar', 'Galar-Zen'].includes(this.forme)) {
 				this.gen = 8;
 			} else if (this.num >= 722 || this.forme.startsWith('Alola') || this.forme === 'Starter') {

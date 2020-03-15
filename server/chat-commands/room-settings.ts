@@ -125,6 +125,7 @@ export const commands: ChatCommands = {
 	ioo(target, room, user) {
 		return this.parse('/modjoin %');
 	},
+	/**/
 	inviteonlynext: 'ionext',
 	ionext(target, room, user) {
 		const groupConfig = Config.groups[Users.PLAYER_SYMBOL];
@@ -142,6 +143,7 @@ export const commands: ChatCommands = {
 			this.sendReply("Your next battle will be invite-only.");
 		}
 	},
+	/**/
 	ionexthelp: [
 		`/ionext - Sets your next battle to be invite-only.`,
 		`/ionext off - Sets your next battle to be publicly visible.`,
@@ -169,11 +171,13 @@ export const commands: ChatCommands = {
 			return this.sendReply(`Modjoin is currently set to: ${modjoinSetting}`);
 		}
 		if (room.battle) {
+			/**/
 			if (!this.can('editprivacy', null, room)) return;
 			const prefix = room.battle.forcedPublic();
 			if (prefix) {
 				return this.errorReply(`This battle is required to be public due to a player having a name prefixed by '${prefix}'.`);
 			}
+			/**/
 		} else if (room.settings.isPersonal) {
 			if (!this.can('editroom', null, room)) return;
 		} else {
@@ -225,8 +229,8 @@ export const commands: ChatCommands = {
 		if (!room.settings.isPrivate) this.parse('/hiddenroom');
 	},
 	modjoinhelp: [
-		`/modjoin [+|%|@|*|player|&|#|off] - Sets modjoin. Users lower than the specified rank can't join this room unless they have a room rank. Requires: \u2606 # &`,
-		`/modjoin [sync|off] - Sets modjoin. Only users who can speak in modchat can join this room. Requires: \u2606 # &`,
+		`/modjoin [+|%|@|*|player|&|~|#|off] - Sets modjoin. Users lower than the specified rank can't join this room unless they have a room rank. Requires: # & ~`,
+		`/modjoin [sync|off] - Sets modjoin. Only users who can speak in modchat can join this room. Requires: # & ~`,
 	],
 
 	roomlanguage(target, room, user) {

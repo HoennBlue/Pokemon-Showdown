@@ -521,6 +521,13 @@ if (!PM.isParentProcess) {
 			Monitor.crashlog(err, 'A battle search child process');
 		}
 	});
+	// Typescript doesn't like this call
+	// @ts-ignore
+	process.on('unhandledRejection', (err: Error) => {
+		if (Config.crashguard) {
+			Monitor.crashlog(err, 'A modlog child process Promise');
+		}
+	});
 	global.Dex = Dex;
 	global.toID = Dex.getId;
 	// eslint-disable-next-line no-eval

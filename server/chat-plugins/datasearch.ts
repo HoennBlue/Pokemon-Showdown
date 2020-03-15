@@ -126,7 +126,7 @@ export const commands: ChatCommands = {
 	dexsearchhelp() {
 		this.sendReplyBox(
 			`<code>/dexsearch [parameter], [parameter], [parameter], ...</code>: searches for Pok\u00e9mon that fulfill the selected criteria<br/>` +
-			`Search categories are: type, tier, color, moves, ability, gen, resists, recovery, zrecovery, priority, stat, weight, height, egg group.<br/>` +
+			`Search categories are: type, tier, color, moves, ability, gen, resists, weak, recovery, zrecovery, priority, stat, weight, height, egg group.<br/>` +
 			`Valid colors are: green, red, blue, white, brown, yellow, purple, pink, gray and black.<br/>` +
 			`Valid tiers are: Uber/OU/UUBL/UU/RUBL/RU/NUBL/NU/PUBL/PU/ZU/NFE/LC Uber/LC/CAP/CAP NFE/CAP LC.<br/>` +
 			`Valid doubles tiers are: DUber/DOU/DBL/DUU/DNU.<br/>` +
@@ -428,6 +428,7 @@ export const commands: ChatCommands = {
 function runDexsearch(target: string, cmd: string, canAll: boolean, message: string) {
 	const searches: DexOrGroup[] = [];
 	const allTiers: {[k: string]: TierTypes.Singles | TierTypes.Other} = Object.assign(Object.create(null), {
+		ag: 'AG',
 		uber: 'Uber', ubers: 'Uber', ou: 'OU',
 		uubl: 'UUBL', uu: 'UU',
 		rubl: 'RUBL', ru: 'RU',
@@ -474,6 +475,8 @@ function runDexsearch(target: string, cmd: string, canAll: boolean, message: str
 	};
 	let showAll = false;
 	let sort = null;
+	let prevoSearch = null;
+	let evoSearch = null;
 	let megaSearch = null;
 	let gmaxSearch = null;
 	let tierSearch = null;
@@ -481,6 +484,8 @@ function runDexsearch(target: string, cmd: string, canAll: boolean, message: str
 	let nationalSearch = null;
 	let fullyEvolvedSearch = null;
 	let singleTypeSearch = false;
+	let illegalSearch = false;
+	let unreleasedSearch = false;
 	let randomOutput = 0;
 	let maxGen = 0;
 	const validParameter = (cat: string, param: string, isNotSearch: boolean, input: string) => {
@@ -511,7 +516,7 @@ function runDexsearch(target: string, cmd: string, canAll: boolean, message: str
 			gens: {}, moves: {}, types: {}, resists: {}, weak: {}, stats: {}, skip: false,
 		};
 		const parameters = andGroup.split("|");
-		if (parameters.length > 3) return {error: "No more than 3 alternatives for each parameter may be used."};
+		if (parameters.length > 4) return {error: "No more than 4 alternatives for each parameter may be used."};
 		for (const parameter of parameters) {
 			let isNotSearch = false;
 			target = parameter.trim().toLowerCase();
@@ -625,10 +630,10 @@ function runDexsearch(target: string, cmd: string, canAll: boolean, message: str
 			}
 
 			let targetInt = 0;
-			if (target.substr(0, 1) === 'g' && Number.isInteger(parseFloat(target.substr(1)))) {
-				targetInt = parseInt(target.substr(1).trim());
-			} else if (target.substr(0, 3) === 'gen' && Number.isInteger(parseFloat(target.substr(3)))) {
-				targetInt = parseInt(target.substr(3).trim());
+			if (/^g[1-7]$/.test(target.trim())) {
+				targetInt = parseInt(target.trim()[1]);
+			} else if (/^gen[1-7]$/.test(target.trim())) {
+				targetInt = parseInt(target.trim()[3]);
 			}
 			if (0 < targetInt && targetInt < 9) {
 				const invalid = validParameter("gens", String(targetInt), isNotSearch, target);
@@ -654,6 +659,18 @@ function runDexsearch(target: string, cmd: string, canAll: boolean, message: str
 				break;
 			}
 
+			if (target === 'unreleased') {
+				unreleasedSearch = true;
+				orGroup.skip = true;
+				break;
+			}
+
+			if (target === 'illegal') {
+				illegalSearch = true;
+				orGroup.skip = true;
+				break;
+			}
+
 			if (target.substr(0, 6) === 'random' && cmd === 'randpoke') {
 				// Validation for this is in the /randpoke command
 				randomOutput = parseInt(target.substr(6));
@@ -665,6 +682,27 @@ function runDexsearch(target: string, cmd: string, canAll: boolean, message: str
 				target = toID(target);
 				orGroup.formes[target] = !isNotSearch;
 				continue;
+			}
+
+			if (['fully evolved', 'fullyevolved', 'fe'].includes(target)) {
+				if (isNotSearch) target = '!' + target;
+				return {reply: `The parameter '${target}' is not supported. Please use '${isNotSearch ? '' : '!'}evo' instead.`};
+			}
+
+			if (target === 'prevos' || target === 'prevo') {
+				if (prevoSearch === isNotSearch) return {reply: "A search cannot include and exclude 'prevo'."};
+				if (parameters.length > 1) return {reply: "The parameter 'prevo' cannot have alternative parameters"};
+				prevoSearch = !isNotSearch;
+				orGroup.skip = true;
+				break;
+			}
+
+			if (target === 'evos' || target === 'evo') {
+				if (evoSearch === isNotSearch) return {reply: "A search cannot include and exclude 'evo'."};
+				if (parameters.length > 1) return {reply: "The parameter 'evo' cannot have alternative parameters"};
+				evoSearch = !isNotSearch;
+				orGroup.skip = true;
+				break;
 			}
 
 			if (target === 'megas' || target === 'mega') {
@@ -818,13 +856,11 @@ function runDexsearch(target: string, cmd: string, canAll: boolean, message: str
 			}
 			return {error: `'${escapeHTML(target)}' could not be found in any of the search categories.`};
 		}
-		if (!orGroup.skip) {
-			searches.push(orGroup);
-		}
+		searches.push(orGroup);
 	}
 	if (
 		showAll && searches.length === 0 && !maxGen && !singleTypeSearch &&
-		megaSearch === null && gmaxSearch === null && fullyEvolvedSearch === null
+		megaSearch === null && gmaxSearch === null && fullyEvolvedSearch === null && prevoSearch === null && evoSearch === null
 	) {
 		return {
 			error: "No search parameters other than 'all' were found. Try '/help dexsearch' for more information on this command.",
@@ -836,6 +872,14 @@ function runDexsearch(target: string, cmd: string, canAll: boolean, message: str
 	const dex: {[k: string]: Species} = {};
 	for (const pokemon in mod.data.Pokedex) {
 		const species = mod.getSpecies(pokemon);
+		const prevoSearchResult = (
+			prevoSearch === null ||
+			prevoSearch === (species.prevo !== '' && mod.getSpecies(species.prevo).gen <= maxGen)
+		);
+		const evoSearchResult = (
+			evoSearch === null ||
+			evoSearch === species.evos.some(evo => mod.getSpecies(evo).gen <= maxGen)
+		);
 		const megaSearchResult = (
 			megaSearch === null || (megaSearch === true && species.isMega) ||
 			(megaSearch === false && !species.isMega)
@@ -857,9 +901,11 @@ function runDexsearch(target: string, cmd: string, canAll: boolean, message: str
 					species.isNonstandard &&
 					!["Custom", "Glitch", "Pokestar"].includes(species.isNonstandard)
 				) ||
-				(species.tier !== 'Unreleased' && species.tier !== 'Illegal')
+				((species.tier !== 'Unreleased' || unreleasedSearch) && (species.tier !== 'Illegal' || illegalSearch))
 			) &&
 			(!species.tier.startsWith("CAP") || capSearch) &&
+			prevoSearchResult &&
+			evoSearchResult &&
 			megaSearchResult &&
 			gmaxSearchResult &&
 			fullyEvolvedSearchResult
@@ -1034,11 +1080,11 @@ function runDexsearch(target: string, cmd: string, canAll: boolean, message: str
 		}
 	}
 	let results: string[] = [];
-	for (const mon of Object.keys(dex).sort()) {
+	for (const mon in dex) {
 		if (singleTypeSearch && dex[mon].types.length !== 1) continue;
 		const isAlola = dex[mon].forme === "Alola" && dex[mon].name !== "Pikachu-Alola";
 		const allowGmax = (gmaxSearch || tierSearch);
-		if (!isAlola && dex[mon].baseSpecies && results.includes(dex[mon].baseSpecies)) continue;
+		if (!isAlola && dex[mon].baseSpecies !== dex[mon].name && toID(dex[mon].baseSpecies) in dex) continue;
 		if (dex[mon].name.endsWith('-Gmax') && !allowGmax) continue;
 		results.push(dex[mon].name);
 	}
@@ -1102,9 +1148,9 @@ function runMovesearch(target: string, cmd: string, canAll: boolean, message: st
 	const searches: MoveOrGroup[] = [];
 	const allCategories = ['physical', 'special', 'status'];
 	const allContestTypes = ['beautiful', 'clever', 'cool', 'cute', 'tough'];
-	const allProperties = ['basePower', 'accuracy', 'priority', 'pp'];
+	const allProperties = ['zMovePower', 'basePower', 'accuracy', 'priority', 'pp'];
 	const allFlags = [
-		'authentic', 'bite', 'bullet', 'charge', 'contact', 'dance', 'defrost', 'gravity', 'highcrit', 'mirror',
+		'authentic', 'bite', 'bullet', 'charge', 'contact', 'dance', 'defrost', 'distance', 'gravity', 'highcrit', 'mirror',
 		'ohko', 'powder', 'protect', 'pulse', 'punch', 'recharge', 'reflectable', 'secondary',
 		'snatch', 'sound', 'zmove', 'maxmove', 'gmaxmove', 'protection',
 	];
@@ -1144,7 +1190,7 @@ function runMovesearch(target: string, cmd: string, canAll: boolean, message: st
 			boost: {}, lower: {}, zboost: {}, status: {}, volatileStatus: {}, targets: {}, recoil: false, skip: false,
 		};
 		const parameters = arg.split("|");
-		if (parameters.length > 3) return {error: "No more than 3 alternatives for each parameter may be used."};
+		if (parameters.length > 4) return {error: "No more than 4 alternatives for each parameter may be used."};
 		for (const parameter of parameters) {
 			let isNotSearch = false;
 			target = parameter.toLowerCase().trim();
@@ -1351,6 +1397,8 @@ function runMovesearch(target: string, cmd: string, canAll: boolean, message: st
 				}
 				let prop = targetParts[propSide];
 				switch (toID(targetParts[propSide])) {
+				case 'zmovepower': prop = 'zMovePower'; break;
+				case 'zpower': prop = 'zMovePower'; break;
 				case 'basepower': prop = 'basePower'; break;
 				case 'bp': prop = 'basePower'; break;
 				case 'power': prop = 'basePower'; break;
@@ -2326,7 +2374,7 @@ function runLearn(target: string, cmd: string, canAll: boolean, message: string)
 				return source;
 			}).sort();
 			for (let source of sources) {
-				buffer += `<li>Gen ${source.charAt(0)} ${sourceNames[source] || sourceNames[source.charAt(1)]}`;
+				buffer += `<li>Gen ${source.charAt(0)} ${sourceNames[source.slice(0, 2)] || sourceNames[source.charAt(1)]}`;
 
 				if (source.charAt(1) === 'E') {
 					let fathers;
@@ -2411,7 +2459,7 @@ export const PM = new QueryProcessManager<AnyObject, AnyObject | null>(module, q
 		Monitor.crashlog(err, 'A search query', query);
 	}
 	return {
-		error: "Sorry! Our search engine crashed on your query. We've been automatically notified and will fix this crash.",
+		error: "Sorry! Our search engine crashed on your query. Please report the error so that it can be fixed.",
 	};
 });
 
@@ -2430,6 +2478,11 @@ if (!PM.isParentProcess) {
 	if (Config.crashguard) {
 		process.on('uncaughtException', err => {
 			Monitor.crashlog(err, 'A dexsearch process');
+		});
+		// Typescript doesn't like this call
+		// @ts-ignore
+		process.on('unhandledRejection', (err: Error) => {
+			Monitor.crashlog(err, 'A dexsearch process Promise');
 		});
 	}
 

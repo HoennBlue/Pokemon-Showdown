@@ -1,4 +1,4 @@
-/* eslint max-len: ["error", 240] */
+/* eslint max-len: ["error", 255] */
 
 import {Dex} from '../sim/dex';
 import {PRNG, PRNGSeed} from '../sim/prng';
@@ -36,11 +36,11 @@ export class RandomTeams {
 
 		this.factoryTier = '';
 		this.format = format;
-		this.prng = prng && !Array.isArray(prng) ? prng : new PRNG(prng);
+		this.prng = prng && !Array.isArray(prng) ? prng : new PRNG(prng as PRNGSeed);
 	}
 
 	setSeed(prng?: PRNG | PRNGSeed) {
-		this.prng = prng && !Array.isArray(prng) ? prng : new PRNG(prng);
+		this.prng = prng && !Array.isArray(prng) ? prng : new PRNG(prng as PRNGSeed);
 	}
 
 	getTeam(options?: PlayerOptions | null): PokemonSet[] {
@@ -286,6 +286,7 @@ export class RandomTeams {
 			const species = this.dex.getSpecies(id);
 			if (species.gen <= this.gen && (!species.isNonstandard || species.isNonstandard === 'Unobtainable')) {
 				formes[hasDexNumber[species.num]].push(species.name);
+				if (species.cosmeticFormes) formes[hasDexNumber[species.num]].push(...species.cosmeticFormes);
 			}
 		}
 
@@ -595,8 +596,7 @@ export class RandomTeams {
 			gmax = true;
 		}
 
-		const randMoves = !isDoubles ? species.randomBattleMoves : (species.randomDoubleBattleMoves || species.randomBattleMoves);
-		const movePool = (randMoves || Object.keys(this.dex.data.Learnsets[species.id]!.learnset!)).slice();
+		const movePool = isDoubles && species.randomDoubleBattleMoves ? species.randomDoubleBattleMoves.slice() : species.randomBattleMoves ? species.randomBattleMoves.slice() : Object.keys(this.dex.getLearnsetData(species.id).learnset || {});
 		const rejectedPool = [];
 		const moves: string[] = [];
 		let ability = '';
@@ -1220,7 +1220,7 @@ export class RandomTeams {
 			ability = ability0.name;
 		}
 
-		item = !isDoubles ? 'Leftovers' : 'Sitrus Berry';
+		item = isDoubles ? 'Sitrus Berry' : 'Leftovers';
 		if (species.requiredItems) {
 			item = this.sample(species.requiredItems);
 
@@ -1434,13 +1434,32 @@ export class RandomTeams {
 		const ruleTable = this.dex.getRuleTable(this.format);
 		const pokemon = [];
 
+		const allowedNFE = ['Chansey', 'Doublade', 'Gligar', 'Pikachu', 'Porygon2', 'Scyther', 'Type: Null'];
+
 		// For Monotype
-		const isMonotype = ruleTable.has('sametypeclause');
-		const typePool = Object.keys(this.dex.data.TypeChart);
-		const type = this.sample(typePool);
+		const isMonotype: string | false = ruleTable.has('sametypeclause') && this.sample(Object.keys(this.dex.data.TypeChart));
+
+		const availableFormes: {[k: string]: string[]} = {};
+		for (const id in this.dex.data.FormatsData) {
+			const template = this.dex.getSpecies(id);
+			if (isMonotype) {
+				let types = template.types;
+				if (template.battleOnly) types = this.dex.getSpecies(template.baseSpecies).types;
+				if (!types.includes(isMonotype)) continue;
+			}
+			if (this.format.id.endsWith("benjaminbutterfree") && !template.prevo) continue;
+			if (template.gen <= this.gen && (!template.nfe || allowedNFE.includes(template.name)) && !template.isMega && !template.isPrimal && !template.isNonstandard && template.randomBattleMoves) {
+				if (!availableFormes[template.baseSpecies]) {
+					availableFormes[template.baseSpecies] = [id];
+				} else {
+					availableFormes[template.baseSpecies].push(id);
+				}
+			}
+		}
+		const pokemonPool = Object.values(availableFormes);
 
 		// PotD stuff
-		let potd: Species | false = false;
+		let potd;
 		if (global.Config && Config.potd && ruleTable.has('potd')) {
 			potd = this.dex.getSpecies(Config.potd);
 		}
@@ -1452,133 +1471,108 @@ export class RandomTeams {
 		const typeComboCount: {[k: string]: number} = {};
 		const teamDetails: RandomTeamsTypes.TeamDetails = {};
 
-		// We make at most two passes through the potential Pokemon pool when creating a team - if the first pass doesn't
-		// result in a team of six Pokemon we perform a second iteration relaxing as many restrictions as possible.
-		for (const restrict of [true, false]) {
-			if (pokemon.length >= 6) break;
-			const pokemonPool = this.getPokemonPool(type, pokemon, isMonotype);
-			while (pokemonPool.length && pokemon.length < 6) {
-				let species = this.dex.getSpecies(this.sampleNoReplace(pokemonPool));
-				if (!species.exists) continue;
+		while (pokemonPool.length && pokemon.length < 6) {
+			let template = this.dex.getSpecies(this.sample(this.sampleNoReplace(pokemonPool)));
+			if (!template.exists) continue;
 
-				// Check if the forme has moves for random battle
-				if (this.format.gameType === 'singles') {
-					if (!species.randomBattleMoves) continue;
-				} else {
-					if (!species.randomDoubleBattleMoves) continue;
-				}
+			const tier = template.tier;
 
-				// Limit to one of each species (Species Clause)
-				if (baseFormes[species.baseSpecies]) continue;
-
-				const tier = species.tier;
-				const types = species.types;
-				const typeCombo = types.slice().sort().join();
-
-				// Adjust rate for species with multiple sets
-				switch (species.baseSpecies) {
-				case 'Arceus': case 'Silvally':
-					if (this.randomChance(17, 18)) continue;
-					break;
-				case 'Castform':
-					if (this.randomChance(2, 3)) continue;
-					break;
-				case 'Aegislash': case 'Basculin': case 'Cherrim': case 'Giratina': case 'Gourgeist': case 'Groudon': case 'Kyogre': case 'Meloetta':
-					if (this.randomChance(1, 2)) continue;
-					break;
-				case 'Greninja':
-					if (this.gen >= 7 && this.randomChance(1, 2)) continue;
-					break;
-				case 'Darmanitan':
-					if (species.gen === 8 && this.randomChance(1, 2)) continue;
-					break;
-				case 'Magearna': case 'Toxtricity': case 'Zacian': case 'Zamazenta':
-				case 'Appletun': case 'Blastoise': case 'Butterfree': case 'Copperajah': case 'Grimmsnarl': case 'Snorlax': case 'Urshifu':
-					if (this.gen >= 8 && this.randomChance(1, 2)) continue;
-					break;
-				}
-
-				// Illusion shouldn't be on the last slot
-				if (species.name === 'Zoroark' && pokemon.length > 4) continue;
-
-				if (restrict) {
-					// Limit one Pokemon per tier, two for Monotype
-					if ((tierCount[tier] >= (isMonotype ? 2 : 1)) && !this.randomChance(1, Math.pow(5, tierCount[tier]))) {
-						continue;
-					}
-
-					if (!isMonotype) {
-						// Limit two of any type
-						let skip = false;
-						for (const typeName of types) {
-							if (typeCount[typeName] > 1) {
-								skip = true;
-								break;
-							}
-						}
-						if (skip) continue;
-					}
-
-					// Limit one of any type combination, two in Monotype
-					if (typeComboCount[typeCombo] >= (isMonotype ? 2 : 1)) continue;
-				}
-
-				// The Pokemon of the Day
-				if (!!potd && potd.exists && pokemon.length < 1) species = potd;
-
-				const set = this.randomSet(species, teamDetails, pokemon.length === 0, this.format.gameType !== 'singles');
-
-				// Okay, the set passes, add it to our team
-				pokemon.push(set);
-
-				if (pokemon.length === 6) {
-					// Set Zoroark's level to be the same as the last Pokemon
-					const illusion = teamDetails['illusion'];
-					if (illusion) pokemon[illusion - 1].level = pokemon[5].level;
-
-					// Don't bother tracking details for the 6th Pokemon
-					break;
-				}
-
-				// Now that our Pokemon has passed all checks, we can increment our counters
-				baseFormes[species.baseSpecies] = 1;
-
-				// Increment tier counter
-				if (tierCount[tier]) {
-					tierCount[tier]++;
-				} else {
-					tierCount[tier] = 1;
-				}
-
-				// Increment type counters
-				for (const typeName of types) {
-					if (typeName in typeCount) {
-						typeCount[typeName]++;
-					} else {
-						typeCount[typeName] = 1;
-					}
-				}
-				if (typeCombo in typeComboCount) {
-					typeComboCount[typeCombo]++;
-				} else {
-					typeComboCount[typeCombo] = 1;
-				}
-
-				// Track what the team has
-				if (set.ability === 'Snow Warning' || set.moves.includes('hail')) teamDetails['hail'] = 1;
-				if (set.moves.includes('raindance') || set.ability === 'Drizzle') teamDetails['rain'] = 1;
-				if (set.ability === 'Sand Stream') teamDetails['sand'] = 1;
-				if (set.moves.includes('sunnyday') || set.ability === 'Drought') teamDetails['sun'] = 1;
-				if (set.moves.includes('spikes')) teamDetails['spikes'] = (teamDetails['spikes'] || 0) + 1;
-				if (set.moves.includes('stealthrock')) teamDetails['stealthRock'] = 1;
-				if (set.moves.includes('stickyweb')) teamDetails['stickyWeb'] = 1;
-				if (set.moves.includes('toxicspikes')) teamDetails['toxicSpikes'] = 1;
-				if (set.moves.includes('defog')) teamDetails['defog'] = 1;
-				if (set.moves.includes('rapidspin')) teamDetails['rapidSpin'] = 1;
-
-				// For setting Zoroark's level
-				if (set.ability === 'Illusion') teamDetails['illusion'] = pokemon.length;
+			// Limit two Pokemon per tier
+			if (tierCount[tier] > 1) {
+				continue;
 			}
+
+			const types = template.types;
+
+			if (!isMonotype) {
+				// Limit two of any type
+				let skip = false;
+				for (const type of types) {
+					if (typeCount[type] > 1 && this.randomChance(4, 5)) {
+						skip = true;
+						break;
+					}
+				}
+				if (skip) continue;
+			}
+
+			if (potd?.exists) {
+				// The Pokemon of the Day belongs in slot 4
+				if (pokemon.length === 3) {
+					template = potd;
+				} else if (template.name === potd.name) {
+					continue; // No thanks, I've already got it
+				}
+			}
+
+			const set = this.randomSet(template, teamDetails, !pokemon.length, this.format.gameType !== 'singles');
+
+			// Limit 1 of any type combination, 2 in Monotype
+			let typeCombo = types.slice().sort().join();
+			if (set.ability === 'Drought' || set.ability === 'Drizzle' || set.ability === 'Sand Stream') {
+				// Drought, Drizzle and Sand Stream don't count towards the type combo limit
+				typeCombo = set.ability;
+				if (typeCombo in typeComboCount) continue;
+			} else {
+				if (typeComboCount[typeCombo] >= (isMonotype ? 2 : 1)) continue;
+			}
+
+			const item = this.dex.getItem(set.item);
+
+			// Limit 1 Z-Move per team
+			if (item.zMove && teamDetails['zMove']) continue;
+
+			// Zoroark copies the last Pokemon
+			if (set.ability === 'Illusion') {
+				if (pokemon.length < 1) continue;
+				set.level = pokemon[pokemon.length - 1].level;
+			}
+
+			if (template.cosmeticFormes) set.species = template.cosmeticFormes[this.random(template.cosmeticFormes.length)];
+
+			// Okay, the set passes, add it to our team
+			pokemon.unshift(set);
+
+			// Don't bother tracking details for the 6th Pokemon
+			if (pokemon.length === 6) break;
+
+			// Now that our Pokemon has passed all checks, we can increment our counters
+			baseFormes[template.baseSpecies] = 1;
+
+			// Tier counter.
+			if (tierCount[tier]) {
+				tierCount[tier]++;
+			} else {
+				tierCount[tier] = 1;
+			}
+
+			// Increment type counters
+			for (const type of types) {
+				if (type in typeCount) {
+					typeCount[type]++;
+				} else {
+					typeCount[type] = 1;
+				}
+			}
+			if (typeCombo in typeComboCount) {
+				typeComboCount[typeCombo]++;
+			} else {
+				typeComboCount[typeCombo] = 1;
+			}
+
+			// Team has Mega/weather/hazards
+			if (item.megaStone) teamDetails['megaStone'] = 1;
+			if (item.zMove) teamDetails['zMove'] = 1;
+			if (set.ability === 'Snow Warning' || set.moves.includes('hail')) teamDetails['hail'] = 1;
+			if (set.moves.includes('raindance') || set.ability === 'Drizzle' && !item.onPrimal) teamDetails['rain'] = 1;
+			if (set.ability === 'Sand Stream') teamDetails['sand'] = 1;
+			if (set.moves.includes('sunnyday') || set.ability === 'Drought' && !item.onPrimal) teamDetails['sun'] = 1;
+			if (set.moves.includes('spikes')) teamDetails['spikes'] = (teamDetails['spikes'] || 0) + 1;
+			if (set.moves.includes('stealthrock')) teamDetails['stealthRock'] = 1;
+			if (set.moves.includes('stickyweb')) teamDetails['stickyWeb'] = 1;
+			if (set.moves.includes('toxicspikes')) teamDetails['toxicSpikes'] = 1;
+			if (set.moves.includes('defog')) teamDetails['defog'] = 1;
+			if (set.moves.includes('rapidspin')) teamDetails['rapidSpin'] = 1;
 		}
 		if (pokemon.length < 6) throw new Error(`Could not build a random team for ${this.format} (seed=${seed})`);
 

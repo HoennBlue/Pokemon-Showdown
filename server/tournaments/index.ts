@@ -18,7 +18,7 @@ const AUTO_START_MINIMUM_TIMEOUT = 30 * 1000;
 const MAX_REASON_LENGTH = 300;
 const MAX_CUSTOM_NAME_LENGTH = 100;
 const TOURBAN_DURATION = 14 * 24 * 60 * 60 * 1000;
-const ALLOW_ALTS = false;
+const ALLOW_ALTS = true;
 
 Punishments.roomPunishmentTypes.set('TOURBAN', 'banned from tournaments');
 
@@ -388,11 +388,13 @@ export class Tournament extends Rooms.RoomGame {
 			return;
 		}
 
+		/*
 		const gameCount = user.games.size;
 		if (gameCount > 4) {
 			output.errorReply("Due to high load, you are limited to 4 games at the same time.");
 			return;
 		}
+		*/
 
 		if (!ALLOW_ALTS) {
 			for (const otherPlayer of this.players) {

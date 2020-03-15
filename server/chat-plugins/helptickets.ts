@@ -420,6 +420,7 @@ function notifyStaff() {
 		const notifying = ticket.claimed ? `` : ` notifying`;
 		// should always exist
 		const ticketRoom = Rooms.get(`help-${ticket.userid}`) as ChatRoom;
+		if (!ticketRoom) continue;
 		const ticketGame = ticketRoom.getGame(HelpTicket)!;
 		if (!ticket.claimed) {
 			hasUnclaimed = true;
@@ -510,6 +511,8 @@ for (const room of Rooms.rooms.values()) {
 }
 
 const ticketTitles: {[k: string]: string} = Object.assign(Object.create(null), {
+	reportserverbug: "Report Server Bug",
+	teamuploadrequest: "Team Upload Request",
 	pmharassment: `PM Harassment`,
 	battleharassment: `Battle Harassment`,
 	inapname: `Inappropriate Username`,
@@ -521,6 +524,8 @@ const ticketTitles: {[k: string]: string} = Object.assign(Object.create(null), {
 	other: `Other`,
 });
 const ticketPages: {[k: string]: string} = Object.assign(Object.create(null), {
+	bug: `I want to report a bug`,
+	bot: `I want to upload a team to the bot`,
 	report: `I want to report someone`,
 	pmharassment: `Someone is harassing me in PMs`,
 	battleharassment: `Someone is harassing me in a battle`,
@@ -609,9 +614,19 @@ export const pages: PageTable = {
 						buf += `<p class="message-error">Abuse of Help requests can result in punishments.</p>`;
 					}
 					if (!isLast) break;
-					buf += `<p><Button>report</Button></p>`;
-					buf += `<p><Button>appeal</Button></p>`;
+					buf += `<p><Button>bug</Button></p>`;
+					buf += `<p><Button>bot</Button></p>`;
 					buf += `<p><Button>misc</Button></p>`;
+					break;
+				case 'bug':
+					buf += `<p>This server is known to have an intermittent problem with its battles; they'll refuse to start, or sometimes they stop responding mid-battle. The cause of this is unfortunately unknown, but you should be OK to start a new battle.</p>`;
+					buf += `<p>If you have another problem, such as a problem with battle mechanics or a server crash, then you can continue with your bug report.</p>`;
+					buf += `<p><button class="button" name="send" value="/helpticket submit Report Server Bug">Report Server Bug</button></p>`;
+					break;
+				case 'bot':
+					buf += `<p>The bot accepts teams uploaded to <a href="https://hastebin.com/">hastebin.com</a>.</p>`;
+					buf += `<p>Don't forget to provide both the hastebin link and the team format in your request.</p>`;
+					buf += `<p><button class="button" name="send" value="/helpticket submit Team Upload Request">Team Upload Request</button></p>`;
 					break;
 				case 'report':
 					buf += `<p><b>What do you want to report someone for?</b></p>`;
@@ -711,6 +726,8 @@ export const pages: PageTable = {
 					if (!isLast) break;
 					buf += `<p><Button>password</Button></p>`;
 					if (user.trusted || isStaff) buf += `<p><Button>roomhelp</Button></p>`;
+					buf += `<p><Button>report</Button></p>`;
+					buf += `<p><Button>appeal</Button></p>`;
 					buf += `<p><Button>other</Button></p>`;
 					break;
 				case 'password':
@@ -1056,6 +1073,10 @@ export const commands: ChatCommands = {
 
 	requesthelp: 'helpticket',
 	helprequest: 'helpticket',
+	reportbug: 'helpticket',
+	bugreport: 'helpticket',
+	uploadteam: 'helpticket',
+	teamupload: 'helpticket',
 	ht: 'helpticket',
 	helpticket: {
 		'': 'create',
@@ -1102,6 +1123,8 @@ export const commands: ChatCommands = {
 			reportTarget = Utils.escapeHTML(reportTarget);
 			if (!Object.values(ticketTitles).includes(ticketType)) return this.parse('/helpticket');
 			const contexts: {[k: string]: string} = {
+				'Team Upload Request': 'Please place the hastebin link and the format in chat so that it can be uploaded to the bot.',
+				'Report Server Bug': 'If the bug happened in a battle, please place the link to the battle in chat.',
 				'PM Harassment': `Hi! Who was harassing you in private messages?`,
 				'Battle Harassment': `Hi! Who was harassing you, and in which battle did it happen? Please post a link to the battle or a replay of the battle.`,
 				'Inappropriate Username': `Hi! Tell us the username that is inappropriate.`,
@@ -1347,7 +1370,6 @@ export const commands: ChatCommands = {
 				ticketBans[userObjID] = punishment;
 			}
 			writeTickets();
-			notifyStaff();
 			notifyStaff();
 			return true;
 		},

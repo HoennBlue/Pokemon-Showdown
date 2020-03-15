@@ -180,7 +180,7 @@ export class FSPath {
 	writeUpdateNow(dataFetcher: () => string | Buffer, options: object) {
 		// @ts-ignore
 		const throttleTime = options.throttle ? Date.now() + options.throttle : 0;
-		const update = {
+		const update: PendingUpdate = {
 			isWriting: true,
 			pendingDataFetcher: null,
 			pendingOptions: null,

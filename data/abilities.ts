@@ -35,6 +35,7 @@ Ratings and how they work:
 export const Abilities: {[abilityid: string]: AbilityData} = {
 	noability: {
 		shortDesc: "Does nothing.",
+		locked: ['trace'],
 		isNonstandard: "Past",
 		name: "No Ability",
 		rating: 0.1,
@@ -75,7 +76,7 @@ export const Abilities: {[abilityid: string]: AbilityData} = {
 		desc: "If this Pokemon is knocked out with a contact move, that move's user loses 1/4 of its maximum HP, rounded down. If any active Pokemon has the Damp Ability, this effect is prevented.",
 		shortDesc: "If this Pokemon is KOed with a contact move, that move's user loses 1/4 its max HP.",
 		name: "Aftermath",
-		onDamagingHitOrder: 1,
+		onDamagingHitOrder: 2,
 		onDamagingHit(damage, target, source, move) {
 			if (move.flags['contact'] && !target.hp) {
 				this.damage(source.baseMaxhp / 4, source, target);
@@ -266,6 +267,7 @@ export const Abilities: {[abilityid: string]: AbilityData} = {
 				move.multihit = 3;
 			}
 		},
+		locked: true,
 		name: "Battle Bond",
 		rating: 4,
 		num: 210,
@@ -448,6 +450,7 @@ export const Abilities: {[abilityid: string]: AbilityData} = {
 		},
 		// Permanent sleep "status" implemented in the relevant sleep-checking effects
 		isUnbreakable: true,
+		locked: true,
 		name: "Comatose",
 		rating: 4,
 		num: 213,
@@ -770,6 +773,7 @@ export const Abilities: {[abilityid: string]: AbilityData} = {
 				this.damage(pokemon.baseMaxhp / 8, pokemon, pokemon, this.dex.getSpecies(speciesid));
 			}
 		},
+		locked: true,
 		name: "Disguise",
 		rating: 3.5,
 		num: 209,
@@ -994,7 +998,7 @@ export const Abilities: {[abilityid: string]: AbilityData} = {
 				}
 			},
 			onEnd(target) {
-				this.add('-end', target, 'ability: Flash Fire', '[silent]');
+				if (target.isActive) this.add('-end', target, 'ability: Flash Fire', '[silent]');
 			},
 		},
 		name: "Flash Fire",
@@ -1033,6 +1037,7 @@ export const Abilities: {[abilityid: string]: AbilityData} = {
 				return this.chainModify(1.5);
 			}
 		},
+		locked: true,
 		name: "Flower Gift",
 		rating: 1,
 		num: 122,
@@ -1058,7 +1063,7 @@ export const Abilities: {[abilityid: string]: AbilityData} = {
 		onAllySetStatus(status, target, source, effect) {
 			if (target.hasType('Grass') && source && target !== source && effect && effect.id !== 'yawn') {
 				this.debug('interrupting setStatus with Flower Veil');
-				if (effect.id === 'synchronize' || (effect.effectType === 'Move' && !effect.secondaries)) {
+				if ((effect as Move)?.status) {
 					const effectHolder = this.effectData.target;
 					this.add('-block', target, 'ability: Flower Veil', '[of] ' + effectHolder);
 				}
@@ -1116,6 +1121,7 @@ export const Abilities: {[abilityid: string]: AbilityData} = {
 				pokemon.formeChange(forme, this.effect, false, '[msg]');
 			}
 		},
+		locked: true,
 		name: "Forecast",
 		rating: 2,
 		num: 59,
@@ -1353,6 +1359,7 @@ export const Abilities: {[abilityid: string]: AbilityData} = {
 				source.formeChange(forme, effect);
 			}
 		},
+		locked: true,
 		name: "Gulp Missile",
 		rating: 2.5,
 		num: 241,
@@ -1462,6 +1469,7 @@ export const Abilities: {[abilityid: string]: AbilityData} = {
 			const targetForme = pokemon.species.name === 'Morpeko' ? 'Morpeko-Hangry' : 'Morpeko';
 			pokemon.formeChange(targetForme);
 		},
+		locked: true,
 		name: "Hunger Switch",
 		rating: 1,
 		num: 258,
@@ -1578,6 +1586,7 @@ export const Abilities: {[abilityid: string]: AbilityData} = {
 				pokemon.formeChange('Eiscue', this.effect, true);
 			}
 		},
+		locked: true,
 		name: "Ice Face",
 		rating: 3,
 		num: 248,
@@ -1632,6 +1641,7 @@ export const Abilities: {[abilityid: string]: AbilityData} = {
 			pokemon.illusion = null;
 		},
 		isUnbreakable: true,
+		locked: ['entrainment', 'powerofalchemy', 'receiver', 'roleplay', 'skillswap', 'trace'],
 		name: "Illusion",
 		rating: 4.5,
 		num: 149,
@@ -1670,6 +1680,7 @@ export const Abilities: {[abilityid: string]: AbilityData} = {
 			}
 			this.effectData.switchingIn = false;
 		},
+		locked: ['entrainment', 'powerofalchemy', 'receiver', 'roleplay', 'trace'],
 		name: "Imposter",
 		rating: 5,
 		num: 150,
@@ -1688,7 +1699,7 @@ export const Abilities: {[abilityid: string]: AbilityData} = {
 		desc: "If this Pokemon is knocked out with a move, that move's user loses HP equal to the amount of damage inflicted on this Pokemon.",
 		shortDesc: "If this Pokemon is KOed with a move, that move's user loses an equal amount of HP.",
 		name: "Innards Out",
-		onDamagingHitOrder: 1,
+		onDamagingHitOrder: 2,
 		onDamagingHit(damage, target, source, move) {
 			if (!target.hp) {
 				this.damage(target.getUndynamaxedHP(damage), source, target);
@@ -1765,7 +1776,7 @@ export const Abilities: {[abilityid: string]: AbilityData} = {
 	ironbarbs: {
 		desc: "Pokemon making contact with this Pokemon lose 1/8 of their maximum HP, rounded down.",
 		shortDesc: "Pokemon making contact with this Pokemon lose 1/8 of their max HP.",
-		onDamagingHitOrder: 1,
+		onDamagingHitOrder: 2,
 		onDamagingHit(damage, target, source, move) {
 			if (move.flags['contact']) {
 				this.damage(source.baseMaxhp / 8, source, target);
@@ -2289,6 +2300,7 @@ export const Abilities: {[abilityid: string]: AbilityData} = {
 	multitype: {
 		shortDesc: "If this Pokemon is an Arceus, its type changes to match its held Plate or Z-Crystal.",
 		// Multitype's type-changing itself is implemented in statuses.js
+		locked: true,
 		name: "Multitype",
 		rating: 4,
 		num: 121,
@@ -2429,6 +2441,7 @@ export const Abilities: {[abilityid: string]: AbilityData} = {
 				}
 			}
 		},
+		locked: ['entrainment', 'powerofalchemy', 'receiver', 'roleplay', 'skillswap', 'trace'],
 		name: "Neutralizing Gas",
 		rating: 5,
 		num: 256,
@@ -2797,28 +2810,20 @@ export const Abilities: {[abilityid: string]: AbilityData} = {
 			if (pokemon.species.id === 'zygardecomplete' || pokemon.hp > pokemon.maxhp / 2) return;
 			this.add('-activate', pokemon, 'ability: Power Construct');
 			pokemon.formeChange('Zygarde-Complete', this.effect, true);
-			pokemon.baseMaxhp = Math.floor(Math.floor(
-				2 * pokemon.species.baseStats['hp'] + pokemon.set.ivs['hp'] + Math.floor(pokemon.set.evs['hp'] / 4) + 100
-			) * pokemon.level / 100 + 10);
-			const newMaxHP = pokemon.volatiles['dynamax'] ? (2 * pokemon.baseMaxhp) : pokemon.baseMaxhp;
-			pokemon.hp = newMaxHP - (pokemon.maxhp - pokemon.hp);
-			pokemon.maxhp = newMaxHP;
 			this.add('-heal', pokemon, pokemon.getHealth, '[silent]');
 		},
+		locked: true,
 		name: "Power Construct",
 		rating: 5,
 		num: 211,
 	},
 	powerofalchemy: {
-		desc: "This Pokemon copies the Ability of an ally that faints. Abilities that cannot be copied are Flower Gift, Forecast, Gulp Missile, Hunger Switch, Ice Face, Illusion, Imposter, Multitype, Stance Change, Trace, Wonder Guard, and Zen Mode.",
+		desc: "This Pokemon copies the Ability of an ally that faints. Forme-changing Abilities cannot be copied, nor can Illusion, Imposter, Trace nor Wonder Guard.",
 		shortDesc: "This Pokemon copies the Ability of an ally that faints.",
 		onAllyFaint(target) {
 			if (!this.effectData.target.hp) return;
 			const ability = target.getAbility();
-			const bannedAbilities = [
-				'battlebond', 'comatose', 'disguise', 'flowergift', 'forecast', 'gulpmissile', 'hungerswitch', 'iceface', 'illusion', 'imposter', 'multitype', 'powerconstruct', 'powerofalchemy', 'receiver', 'rkssystem', 'schooling', 'shieldsdown', 'stancechange', 'trace', 'wonderguard', 'zenmode',
-			];
-			if (bannedAbilities.includes(target.ability)) return;
+			if (ability.locked === true || ability.locked && ability.locked.includes('powerofalchemy')) return;
 			this.add('-ability', this.effectData.target, ability, '[from] ability: Power of Alchemy', '[of] ' + target);
 			this.effectData.target.setAbility(ability);
 		},
@@ -2923,7 +2928,9 @@ export const Abilities: {[abilityid: string]: AbilityData} = {
 			const type = move.type;
 			if (type && type !== '???' && source.getTypes().join() !== type) {
 				if (!source.setType(type)) return;
+				this.attrLastMove('[still]');
 				this.add('-start', source, 'typechange', type, '[from] ability: Protean');
+				this.addMove('-anim', source, move, target);
 			}
 		},
 		name: "Protean",
@@ -3044,16 +3051,13 @@ export const Abilities: {[abilityid: string]: AbilityData} = {
 		rating: 1.5,
 		num: 155,
 	},
-	receiver: {
-		desc: "This Pokemon copies the Ability of an ally that faints. Abilities that cannot be copied are Flower Gift, Forecast, Gulp Missile, Hunger Switch, Ice Face, Illusion, Imposter, Multitype, Neutralizing Gas, Stance Change, Trace, Wonder Guard, and Zen Mode.",
+	"receiver": {
+		desc: "This Pokemon copies the Ability of an ally that faints. Forme-changing Abilities cannot be copied, nor can Illusion, Imposter, Neutralizing Gas, Trace nor Wonder Guard.",
 		shortDesc: "This Pokemon copies the Ability of an ally that faints.",
 		onAllyFaint(target) {
 			if (!this.effectData.target.hp) return;
 			const ability = target.getAbility();
-			const bannedAbilities = [
-				'battlebond', 'comatose', 'disguise', 'flowergift', 'forecast', 'gulpmissile', 'hungerswitch', 'iceface', 'illusion', 'imposter', 'multitype', 'neutralizinggas', 'powerconstruct', 'powerofalchemy', 'receiver', 'rkssystem', 'schooling', 'shieldsdown', 'stancechange', 'trace', 'wonderguard', 'zenmode',
-			];
-			if (bannedAbilities.includes(target.ability)) return;
+			if (ability.locked === true || ability.locked && ability.locked.includes('receiver')) return;
 			this.add('-ability', this.effectData.target, ability, '[from] ability: Receiver', '[of] ' + target);
 			this.effectData.target.setAbility(ability);
 		},
@@ -3168,6 +3172,7 @@ export const Abilities: {[abilityid: string]: AbilityData} = {
 	rkssystem: {
 		shortDesc: "If this Pokemon is a Silvally, its type changes to match its held Memory.",
 		// RKS System's type-changing itself is implemented in statuses.js
+		locked: true,
 		name: "RKS System",
 		rating: 4,
 		num: 225,
@@ -3188,7 +3193,7 @@ export const Abilities: {[abilityid: string]: AbilityData} = {
 	roughskin: {
 		desc: "Pokemon making contact with this Pokemon lose 1/8 of their maximum HP, rounded down.",
 		shortDesc: "Pokemon making contact with this Pokemon lose 1/8 of their max HP.",
-		onDamagingHitOrder: 1,
+		onDamagingHitOrder: 2,
 		onDamagingHit(damage, target, source, move) {
 			if (move.flags['contact']) {
 				this.damage(source.baseMaxhp / 8, source, target);
@@ -3330,6 +3335,7 @@ export const Abilities: {[abilityid: string]: AbilityData} = {
 				}
 			}
 		},
+		locked: true,
 		name: "Schooling",
 		rating: 3,
 		num: 208,
@@ -3450,8 +3456,6 @@ export const Abilities: {[abilityid: string]: AbilityData} = {
 		onModifyMove(move, pokemon) {
 			if (move.secondaries) {
 				delete move.secondaries;
-				// Technically not a secondary effect, but it is negated
-				if (move.id === 'clangoroussoulblaze') delete move.selfBoost;
 				// Actual negation of `AfterMoveSecondary` effects implemented in scripts.js
 				move.hasSheerForce = true;
 			}
@@ -3523,6 +3527,7 @@ export const Abilities: {[abilityid: string]: AbilityData} = {
 			return null;
 		},
 		isUnbreakable: true,
+		locked: true,
 		name: "Shields Down",
 		rating: 3,
 		num: 197,
@@ -3577,7 +3582,7 @@ export const Abilities: {[abilityid: string]: AbilityData} = {
 				return this.chainModify(0.5);
 			},
 			onEnd(target) {
-				this.add('-end', target, 'Slow Start');
+				if (target.isActive) this.add('-end', target, 'Slow Start');
 			},
 		},
 		name: "Slow Start",
@@ -3764,6 +3769,7 @@ export const Abilities: {[abilityid: string]: AbilityData} = {
 			const targetForme = (move.id === 'kingsshield' ? 'Aegislash' : 'Aegislash-Blade');
 			if (attacker.species.name !== targetForme) attacker.formeChange(targetForme);
 		},
+		locked: true,
 		name: "Stance Change",
 		rating: 4,
 		num: 176,
@@ -4195,8 +4201,8 @@ export const Abilities: {[abilityid: string]: AbilityData} = {
 		rating: 2.5,
 		num: 137,
 	},
-	trace: {
-		desc: "On switch-in, or when this Pokemon acquires this ability, this Pokemon copies a random adjacent opposing Pokemon's Ability. However, if one or more adjacent Pokemon has the Ability \"No Ability\", Trace won't copy anything even if there is another valid Ability it could normally copy. Otherwise, if there is no Ability that can be copied at that time, this Ability will activate as soon as an Ability can be copied. Abilities that cannot be copied are the previously mentioned \"No Ability\", as well as Battle Bond, Comatose, Disguise, Flower Gift, Forecast, Gulp Missile, Hunger Switch, Ice Face, Illusion, Imposter, Multitype, Neutralizing Gas, Power Construct, Power of Alchemy, Receiver, RKS System, Schooling, Shields Down, Stance Change, Trace, and Zen Mode.",
+	"trace": {
+		desc: "On switch-in, this Pokemon copies a random adjacent opposing Pokemon's Ability. If there is no Ability that can be copied at that time, this Ability will activate as soon as an Ability can be copied. Forme-changing Abilities cannot be copied, nor can Illusion, Imposter, Neutralizing Gas or Trace.",
 		shortDesc: "On switch-in, or when it can, this Pokemon copies a random adjacent foe's Ability.",
 		onStart(pokemon) {
 			if (pokemon.side.foe.active.some(
@@ -4213,10 +4219,7 @@ export const Abilities: {[abilityid: string]: AbilityData} = {
 				if (possibleTargets.length > 1) rand = this.random(possibleTargets.length);
 				const target = possibleTargets[rand];
 				const ability = target.getAbility();
-				const bannedAbilities = [
-					'noability', 'battlebond', 'comatose', 'disguise', 'flowergift', 'forecast', 'gulpmissile', 'hungerswitch', 'iceface', 'illusion', 'imposter', 'multitype', 'neutralizinggas', 'powerconstruct', 'powerofalchemy', 'receiver', 'rkssystem', 'schooling', 'shieldsdown', 'stancechange', 'trace', 'zenmode',
-				];
-				if (bannedAbilities.includes(target.ability)) {
+				if (ability.locked === true || ability.locked && ability.locked.includes('trace')) {
 					possibleTargets.splice(rand, 1);
 					continue;
 				}
@@ -4225,6 +4228,7 @@ export const Abilities: {[abilityid: string]: AbilityData} = {
 				return;
 			}
 		},
+		locked: ['powerofalchemy', 'receiver', 'roleplay', 'trace'],
 		name: "Trace",
 		rating: 2.5,
 		num: 36,
@@ -4554,6 +4558,7 @@ export const Abilities: {[abilityid: string]: AbilityData} = {
 				return null;
 			}
 		},
+		locked: ['powerofalchemy', 'receiver', 'roleplay', 'skillswap'],
 		name: "Wonder Guard",
 		rating: 5,
 		num: 25,
@@ -4604,11 +4609,12 @@ export const Abilities: {[abilityid: string]: AbilityData} = {
 				}
 			},
 			onEnd(pokemon) {
-				if (['Zen', 'Galar-Zen'].includes(pokemon.species.forme)) {
+				if (pokemon.isActive && ['Zen', 'Galar-Zen'].includes(pokemon.species.forme)) {
 					pokemon.formeChange(pokemon.species.battleOnly as string);
 				}
 			},
 		},
+		locked: true,
 		name: "Zen Mode",
 		rating: 0,
 		num: 161,

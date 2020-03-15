@@ -148,5 +148,6 @@ export const Abilities: {[k: string]: ModdedAbilityData} = {
 	zenmode: {
 		inherit: true,
 		desc: "If this Pokemon is a Darmanitan, it changes to Zen Mode if it has 1/2 or less of its maximum HP at the end of a turn. If Darmanitan's HP is above 1/2 of its maximum HP at the end of a turn, it changes back to Standard Mode. If Darmanitan loses this Ability while in Zen Mode, it reverts to Standard Mode immediately.",
+		locked: false,
 	},
 };

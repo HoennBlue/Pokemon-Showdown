@@ -12,7 +12,7 @@ import {Pokemon, EffectState, RESTORATIVE_BERRIES} from './pokemon';
 import {PRNG, PRNGSeed} from './prng';
 import {Side} from './side';
 import {State} from './state';
-import {BattleQueue, Action} from './battle-queue';
+import {BattleQueue, Action, MoveAction} from './battle-queue';
 import {Utils} from '../lib/utils';
 
 /** A Pokemon that has fainted. */
@@ -139,6 +139,12 @@ export class Battle {
 
 	trunc: (num: number, bits?: number) => number;
 	clampIntRange: (num: any, min?: number, max?: number) => number;
+
+	// oms
+	doGetMixedSpecies(template: Species, deltas: MegaDeltas) { return template; }
+	getMegaDeltas(template: Species) { return {} as any as MegaDeltas; }
+	getMixedSpecies(template: string | Species, megaSpecies: string | Species) { return this.dex.getSpecies(template); }
+	bounceMove(move: Effect, target: Pokemon, source?: Pokemon) {}
 
 	constructor(options: BattleOptions) {
 		this.log = [];
@@ -847,7 +853,10 @@ export class Battle {
 		}
 		for (const id in pokemon.volatiles) {
 			const volatileState = pokemon.volatiles[id];
-			const volatile = pokemon.getVolatile(id)!;
+			const volatile = pokemon.getVolatile(id);
+			if (!volatile) {
+				continue; // for Partners in Crime
+			}
 			// @ts-ignore - dynamic lookup
 			callback = volatile[callbackName];
 			if (callback !== undefined || (getKey && volatileState[getKey])) {
@@ -1232,7 +1241,7 @@ export class Battle {
 		this.ended = true;
 		this.requestState = '';
 		for (const s of this.sides) {
-			s.activeRequest = null;
+			if (s) s.activeRequest = null;
 		}
 		return true;
 	}
@@ -1249,8 +1258,7 @@ export class Battle {
 			throw new Error(`Invalid switch position ${pos} / ${side.active.length}`);
 		}
 		const oldActive = side.active[pos];
-		const unfaintedActive = oldActive?.hp ? oldActive : null;
-		if (unfaintedActive) {
+		if (oldActive?.hp) {
 			oldActive.beingCalledBack = true;
 			if (sourceEffect && (sourceEffect as Move).selfSwitch === 'copyvolatile') {
 				oldActive.switchCopyFlag = true;
@@ -1292,7 +1300,6 @@ export class Battle {
 				pokemon.copyVolatileFrom(oldActive);
 			}
 			if (newMove) pokemon.lastMove = newMove;
-			oldActive.clearVolatile();
 		}
 		if (oldActive) {
 			oldActive.isActive = false;
@@ -1302,6 +1309,7 @@ export class Battle {
 			pokemon.position = pos;
 			side.pokemon[pokemon.position] = pokemon;
 			side.pokemon[oldActive.position] = oldActive;
+			oldActive.clearVolatile();
 		}
 		pokemon.isActive = true;
 		side.active[pos] = pokemon;
@@ -1619,7 +1627,10 @@ export class Battle {
 			this.add('rated', typeof this.rated === 'string' ? this.rated : '');
 		}
 
-		if (format.onBegin) format.onBegin.call(this);
+		if (format.onBegin) {
+			format.onBegin.call(this);
+			if (this.ended) return;
+		}
 		for (const rule of this.ruleTable.keys()) {
 			if (rule.startsWith('+') || rule.startsWith('-') || rule.startsWith('!')) continue;
 			const subFormat = this.dex.getFormat(rule);
@@ -1912,7 +1923,13 @@ export class Battle {
 		if (!damage) return damage;
 		if (!target || !target.hp) return false;
 		if (!target.isActive) return false;
-		if (target.hp >= target.maxhp) return false;
+		if (target.hp >= target.maxhp) {
+			if (effect?.effectType === 'Move') {
+				this.add('-fail', target, 'heal');
+				this.attrLastMove('[still]');
+			}
+			return null;
+		}
 		const finalDamage = target.heal(damage, source, effect);
 		switch (effect?.id) {
 		case 'leechseed':
@@ -2015,13 +2032,16 @@ export class Battle {
 			}) as unknown as ActiveMove;
 			move.hit = 0;
 		}
-
+		/*
 		if (!move.ignoreImmunity || (move.ignoreImmunity !== true && !move.ignoreImmunity[move.type])) {
 			if (!target.runImmunity(move.type, !suppressMessages)) {
 				return false;
 			}
 		}
-
+		if (move.secondaryType && !target.runImmunity(move.type, !suppressMessages)) {
+			return false;
+		}
+		*/
 		if (move.ohko) return target.maxhp;
 		if (move.damageCallback) return move.damageCallback.call(this, pokemon, target);
 		if (move.damage === 'level') {
@@ -2216,7 +2236,7 @@ export class Battle {
 		// Final modifier. Modifiers that modify damage after min damage check, such as Life Orb.
 		baseDamage = this.runEvent('ModifyDamage', pokemon, target, move, baseDamage);
 
-		if (move.isZOrMaxPowered && target.getMoveHitData(move).zBrokeProtect) {
+		if (target.getMoveHitData(move).zBrokeProtect) {
 			baseDamage = this.modify(baseDamage, 0.25);
 			this.add('-zbroken', target);
 		}
@@ -2363,7 +2383,6 @@ export class Battle {
 		for (const side of this.sides) {
 			for (const pokemon of side.active) {
 				if (pokemon.fainted) {
-					pokemon.status = 'fnt' as ID;
 					pokemon.switchFlag = true;
 				}
 			}
@@ -2388,12 +2407,13 @@ export class Battle {
 				pokemon.side.pokemonLeft--;
 				this.runEvent('Faint', pokemon, faintData.source, faintData.effect);
 				this.singleEvent('End', pokemon.getAbility(), pokemon.abilityData, pokemon);
-				pokemon.clearVolatile(false);
 				pokemon.fainted = true;
+				pokemon.status = 'fnt' as ID;
 				pokemon.illusion = null;
 				pokemon.isActive = false;
 				pokemon.isStarted = false;
 				pokemon.side.faintedThisTurn = true;
+				pokemon.clearVolatile(false);
 			}
 		}
 
@@ -2453,6 +2473,7 @@ export class Battle {
 		if (action.choice === 'move') {
 			let move = action.move;
 			if (action.zmove) {
+				if (move.id === 'weatherball') this.singleEvent('ModifyType', move, null, action.pokemon, action.pokemon, move, move);
 				const zMoveName = this.getZMove(action.move, action.pokemon, true);
 				if (zMoveName) {
 					const zMove = this.dex.getActiveMove(zMoveName);
@@ -2531,6 +2552,17 @@ export class Battle {
 		case 'megaEvo':
 			this.runMegaEvo(action.pokemon);
 			break;
+		case 'megaEvoDone':
+			// In Gen 7, the action order is recalculated for a Pokémon that mega evolves.
+			const moveIndex = this.queue.list.findIndex(queuedAction =>
+				queuedAction.pokemon === action.pokemon && queuedAction.choice === 'move',
+			);
+			if (moveIndex >= 0) {
+				const moveAction = this.queue.list.splice(moveIndex, 1)[0] as MoveAction;
+				moveAction.mega = 'done';
+				this.queue.insertChoice(moveAction, true);
+			}
+			return false;
 		case 'runDynamax':
 			action.pokemon.addVolatile('dynamax');
 			for (const pokemon of action.pokemon.side.pokemon) {
@@ -2640,18 +2672,6 @@ export class Battle {
 			// in gen 3 or earlier, switching in fainted pokemon is done after
 			// every move, rather than only at the end of the turn.
 			this.checkFainted();
-		} else if (action.choice === 'megaEvo' && this.gen === 7) {
-			this.eachEvent('Update');
-			// In Gen 7, the action order is recalculated for a Pokémon that mega evolves.
-			for (const [i, queuedAction] of this.queue.list.entries()) {
-				if (queuedAction.pokemon === action.pokemon && queuedAction.choice === 'move') {
-					this.queue.list.splice(i, 1);
-					queuedAction.mega = 'done';
-					this.queue.insertChoice(queuedAction, true);
-					break;
-				}
-			}
-			return false;
 		} else if (this.queue.peek()?.choice === 'instaswitch') {
 			return false;
 		}
@@ -2991,28 +3011,36 @@ export class Battle {
 				winner: this.winner,
 				seed: this.prngSeed,
 				turns: this.turn,
-				p1: this.sides[0].name,
-				p2: this.sides[1].name,
-				p3: this.sides[2] && this.sides[2].name,
-				p4: this.sides[3] && this.sides[3].name,
-				p1team: this.sides[0].team,
-				p2team: this.sides[1].team,
-				p3team: this.sides[2] && this.sides[2].team,
-				p4team: this.sides[3] && this.sides[3].team,
-				score: [this.sides[0].pokemonLeft, this.sides[1].pokemonLeft],
+				score: [] as number[],
 				inputLog: this.inputLog,
+				p1: undefined as string | undefined,
+				p2: undefined as string | undefined,
+				p3: undefined as string | undefined,
+				p4: undefined as string | undefined,
+				p1team: undefined as PokemonSet[] | undefined,
+				p2team: undefined as PokemonSet[] | undefined,
+				p3team: undefined as PokemonSet[] | undefined,
+				p4team: undefined as PokemonSet[] | undefined,
 			};
+			if (this.sides[0]) {
+				log.score.push(this.sides[0].pokemonLeft);
+				log.p1 = this.sides[0].name;
+				log.p1team = this.sides[0].team;
+			}
+			if (this.sides[1]) {
+				log.score.push(this.sides[1].pokemonLeft);
+				log.p2 = this.sides[1].name;
+				log.p2team = this.sides[1].team;
+			}
 			if (this.sides[2]) {
 				log.score.push(this.sides[2].pokemonLeft);
-			} else {
-				delete log.p3;
-				delete log.p3team;
+				log.p3 = this.sides[2].name;
+				log.p3team = this.sides[2].team;
 			}
 			if (this.sides[3]) {
 				log.score.push(this.sides[3].pokemonLeft);
-			} else {
-				delete log.p4;
-				delete log.p4team;
+				log.p4 = this.sides[3].name;
+				log.p4team = this.sides[3].team;
 			}
 			this.send('end', JSON.stringify(log));
 			this.sentEnd = true;

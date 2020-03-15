@@ -263,8 +263,9 @@ export const Abilities: {[k: string]: ModdedAbilityData} = {
 			) return;
 			target.formeChange('Shaymin', this.effect);
 		},
-		onDamagingHit(damage, target, source, move) {
-			if (target.species.id === 'shaymin') {
+		onDamagingHit(damage, target, source, effect) {
+			if (source === target) return;
+			if (target && target.species.id === 'shaymin') {
 				target.formeChange('Shaymin-Sky', this.effect);
 			}
 		},
@@ -272,7 +273,9 @@ export const Abilities: {[k: string]: ModdedAbilityData} = {
 			if (!target || !move) return;
 			if (source.species.baseSpecies !== 'Shaymin' || source.transformed) return;
 			if (move.category !== 'Status') return;
+			this.attrLastMove('[still]');
 			source.formeChange('Shaymin', this.effect);
+			this.addMove('-anim', source, move, target);
 		},
 		onAfterMove(pokemon) {
 			if (pokemon.species.id !== 'shaymin' || pokemon.transformed) return;
@@ -320,7 +323,7 @@ export const Abilities: {[k: string]: ModdedAbilityData} = {
 		},
 		onDamagingHitOrder: 1,
 		onDamagingHit(damage, target, source, move) {
-			if (!target.hp) {
+			if (source && source !== target && move && move.effectType === 'Move' && !target.hp) {
 				this.damage(damage, source, target);
 			}
 		},
@@ -388,8 +391,8 @@ export const Abilities: {[k: string]: ModdedAbilityData} = {
 	giblovepls: {
 		desc: "After being damaged by a contact move, this Pokemon is healed by 20% of its maximum HP and has its Defense raised by one stage.",
 		shortDesc: "Defense +1 and heal 20% after hit by contact move.",
-		onDamagingHit(damage, target, source, move) {
-			if (move.flags['contact']) {
+		onDamagingHit(damage, target, source, effect) {
+			if (effect?.flags['contact']) {
 				this.boost({def: 1}, target);
 				this.heal(target.baseMaxhp / 5, target);
 			}
@@ -430,10 +433,10 @@ export const Abilities: {[k: string]: ModdedAbilityData} = {
 			if (pokemon === pokemon.side.pokemon[i]) return;
 			pokemon.illusion = pokemon.side.pokemon[i];
 		},
-		onDamagingHit(damage, target, source, move) {
+		onDamagingHit(damage, target, source, effect) {
 			// Illusion that only breaks when hit with a move that is super effective VS dark
-			if (target.illusion && this.dex.getEffectiveness(move.type, target.getTypes()) > 0) {
-				this.singleEvent('End', this.dex.getAbility('Illusion'), target.abilityData, target, source, move);
+			if (target.illusion && effect && effect.effectType === 'Move' && effect.id !== 'confused' && this.dex.getEffectiveness(effect.type, target.getTypes()) > 0) {
+				this.singleEvent('End', this.dex.getAbility('Illusion'), target.abilityData, target, source, effect);
 			}
 		},
 		onEnd(pokemon) {
@@ -508,7 +511,7 @@ export const Abilities: {[k: string]: ModdedAbilityData} = {
 		onCriticalHit: false,
 		onSetStatus(status, target, source, effect) {
 			if (target.species.id !== 'miniormeteor' || target.transformed) return;
-			if ((effect as Move)?.status) {
+			if ((effect as ActiveMove)?.status) {
 				this.add('-immune', target, '[from] ability: Mystery Shell');
 			}
 			return false;
@@ -604,8 +607,8 @@ export const Abilities: {[k: string]: ModdedAbilityData} = {
 				return this.chainModify([0x1333, 0x1000]);
 			}
 		},
-		onDamagingHit(damage, target, source, move) {
-			if (move.flags['contact']) {
+		onDamagingHit(damage, target, source, effect) {
+			if (effect && effect.effectType === 'Move' && effect.flags.contact && effect.id !== 'confused') {
 				this.boost({spe: 1});
 			}
 		},
@@ -854,6 +857,22 @@ export const Abilities: {[k: string]: ModdedAbilityData} = {
 			}
 		},
 	},
+	// Raid
+	tempest: {
+		desc: "This Pokemon's Flying-type moves have 1.3x Base Power and will always hit.",
+		shortDesc: "Flying type moves have 1.3x power and always hit.",
+		name: "Tempest",
+		isNonstandard: "Custom",
+		onBasePowerPriority: 8,
+		onBasePower(basePower, attacker, defender, move) {
+			if (move.type === 'Flying') {
+				return this.chainModify(1.3);
+			}
+		},
+		onModifyMove(move) {
+			if (move.type === 'Flying') move.accuracy = true;
+		},
+	},
 	// Ransei
 	superguarda: {
 		desc: "This user's Attack is doubled until it is hit by a super effective attack. If this Pokemon has a major status condition, its Attack is 1.5x; burn halving physical damage is ignored. This Pokemon can only be damaged by direct attacks.",
@@ -934,7 +953,7 @@ export const Abilities: {[k: string]: ModdedAbilityData} = {
 		},
 		onSetStatus(status, target, source, effect) {
 			if (status.id !== 'brn') return;
-			if ((effect as Move)?.status) {
+			if ((effect as ActiveMove)?.status) {
 				this.add('-immune', target, '[from] ability: Thiccer Fat');
 			}
 			return false;
@@ -945,7 +964,7 @@ export const Abilities: {[k: string]: ModdedAbilityData} = {
 		desc: "This Pokemon is immune to volatile statuses.",
 		shortDesc: "This Pokemon is immune to volatile statuses.",
 		onTryAddVolatile(status, target) {
-			if ([toID(target.name), 'furycutter', 'stockpile'].includes(status.id)) return;
+			if (toID(target.name).includes(status.id)) return;
 			this.add('-immune', target, '[from] ability: Numb Numb Juice');
 			return null;
 		},
@@ -1099,7 +1118,7 @@ export const Abilities: {[k: string]: ModdedAbilityData} = {
 		},
 		onSetStatus(status, target, source, effect) {
 			if (status.id !== 'brn') return;
-			if ((effect as Move)?.status) {
+			if ((effect as ActiveMove)?.status) {
 				this.add('-immune', target, '[from] ability: Water Bubble');
 			}
 			return false;

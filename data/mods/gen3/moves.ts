@@ -524,6 +524,9 @@ export const Moves: {[k: string]: ModdedMoveData} = {
 	},
 	leechseed: {
 		inherit: true,
+		onTryImmunity(target) {
+			return !target.hasType('Grass');
+		},
 		desc: "The Pokemon at the user's position steals 1/8 of the target's maximum HP, rounded down, at the end of each turn. If the target uses Baton Pass, the replacement will continue being leeched. If the target switches out or uses Rapid Spin, the effect ends. Grass-type Pokemon are immune to this move on use, but not its effect.",
 	},
 	lightscreen: {

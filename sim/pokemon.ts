@@ -8,7 +8,7 @@
 import {State} from './state';
 
 /** A Pokemon's move slot. */
-interface MoveSlot {
+export interface MoveSlot {
 	id: ID;
 	move: string;
 	pp: number;
@@ -33,23 +33,23 @@ export const RESTORATIVE_BERRIES = new Set([
 ] as ID[]);
 
 export class Pokemon {
-	readonly side: Side;
+	side: Side;
 	readonly battle: Battle;
 
 	readonly set: PokemonSet;
-	readonly name: string;
-	readonly fullname: string;
-	readonly level: number;
+	name: string;
+	fullname: string;
+	level: number;
 	readonly gender: GenderName;
 	readonly happiness: number;
 	readonly pokeball: string;
 	readonly gigantamax: boolean;
 
 	/** Transform keeps the original pre-transformed Hidden Power in Gen 2-4. */
-	readonly baseHpType: string;
+	baseHpType: string;
 	readonly baseHpPower: number;
 
-	readonly baseMoveSlots: MoveSlot[];
+	baseMoveSlots: MoveSlot[];
 	moveSlots: MoveSlot[];
 
 	hpType: string;
@@ -237,11 +237,19 @@ export class Pokemon {
 	 * An object for storing untyped data, for mods to use.
 	 */
 	m: PokemonModData;
+	recalculateStats() { }
+	getSharedPower() { return new Set([""]); }
+	takeDual(source?: Pokemon) { return this.takeItem(source); }
+	getLinkedMoves(ignoreDisabled?: boolean) { return [] as ID[]; }
+	hasLinkedMove(move: string) { return true; }
 
 	constructor(set: string | AnyObject, side: Side) {
 		this.side = side;
 		this.battle = side.battle;
 
+		/**
+		 * An object for storing untyped data, for mods to use.
+		 */
 		this.m = {};
 
 		const pokemonScripts = this.battle.format.pokemon || this.battle.dex.data.Scripts.pokemon;
@@ -544,7 +552,7 @@ export class Pokemon {
 		for (const stat in this.stats) {
 			statSum += this.calculateStat(stat, this.boosts[stat as BoostName]);
 			awakeningSum += this.calculateStat(
-				stat, this.boosts[stat as BoostName]) + this.battle.getAwakeningValues(this.set, stat);
+				stat, this.boosts[stat as BoostName]) + (this.set.evs[stat] || 0);
 		}
 		const combatPower = Math.floor(Math.floor(statSum * this.level * 6 / 100) +
 			(Math.floor(awakeningSum) * Math.floor((this.level * 4) / 100 + 2)));
@@ -704,9 +712,6 @@ export class Pokemon {
 	}
 
 	ignoringAbility() {
-		const abilities = [
-			'battlebond', 'comatose', 'disguise', 'gulpmissile', 'iceface', 'multitype', 'powerconstruct', 'rkssystem', 'schooling', 'shieldsdown', 'stancechange',
-		];
 		// Check if any active pokemon have the ability Neutralizing Gas
 		let neutralizinggas = false;
 		for (const pokemon of this.battle.getAllActive()) {
@@ -721,7 +726,7 @@ export class Pokemon {
 		return !!(
 			(this.battle.gen >= 5 && !this.isActive) ||
 			((this.volatiles['gastroacid'] || (neutralizinggas && this.ability !== ('neutralizinggas' as ID))) &&
-			!abilities.includes(this.ability))
+			this.getAbility().locked !== true)
 		);
 	}
 
@@ -997,6 +1002,19 @@ export class Pokemon {
 		return boosts;
 	}
 
+	canBoost(item: Item) {
+		if (this.battle.gen > 5 && !this.side.foe.pokemonLeft) return false;
+		const boost = this.battle.runEvent('Boost', this, this, item, Object.assign({}, item.boosts)) as SparseBoostsTable;
+		let boostName: BoostName;
+		for (boostName in boost) {
+			let boosted = this.boosts[boostName] + boost[boostName]!;
+			if (boosted > 6) boosted = 6;
+			if (boosted < -6) boosted = -6;
+			if (boosted !== this.boosts[boostName]) return true;
+		}
+		return false;
+	}
+
 	boostBy(boosts: SparseBoostsTable) {
 		let delta = 0;
 		let boostName: BoostName;
@@ -1045,7 +1063,6 @@ export class Pokemon {
 				}
 			}
 		}
-		pokemon.clearVolatile();
 		for (const i in this.volatiles) {
 			const volatile = this.getVolatile(i) as Condition;
 			this.battle.singleEvent('Copy', volatile, this.volatiles[i], this);
@@ -1147,7 +1164,9 @@ export class Pokemon {
 	 * Use formChange to handle changes to ability and sending client messages.
 	 */
 	setSpecies(rawSpecies: Species, source: Effect | null = this.battle.effect, isTransform = false) {
-		const species = this.battle.runEvent('ModifySpecies', this, null, source, rawSpecies);
+		const format = this.battle.format;
+		const species = this.battle.singleEvent('ModifySpecies', format, null, this, format, source, rawSpecies);
+
 		if (!species) return null;
 		this.species = species;
 
@@ -1188,7 +1207,8 @@ export class Pokemon {
 	 */
 	formeChange(
 		speciesId: string | Species, source: Effect = this.battle.effect,
-		isPermanent?: boolean, message?: string
+		isPermanent?: boolean, message?: string,
+		abilitySlot: '0' | '1' | 'H' | 'S' = '0'
 	) {
 		const rawSpecies = this.battle.dex.getSpecies(speciesId);
 
@@ -1202,9 +1222,11 @@ export class Pokemon {
 			this.illusion ? this.illusion.species.name : species.baseSpecies;
 		if (isPermanent) {
 			this.baseSpecies = rawSpecies;
-			this.details = species.name + (this.level === 100 ? '' : ', L' + this.level) +
+			this.details = rawSpecies.name + (this.level === 100 ? '' : ', L' + this.level) +
 				(this.gender === '' ? '' : ', ' + this.gender) + (this.set.shiny ? ', shiny' : '');
 			this.battle.add('detailschange', this, (this.illusion || this).details);
+			this.baseMaxhp = this.species.maxHP || this.baseStoredStats.hp;
+			this.hp -= this.maxhp - (this.maxhp = this.baseMaxhp * (this.volatiles['dynamax'] ? 2 : 1));
 			if (source.effectType === 'Item') {
 				if (source.zMove) {
 					this.battle.add('-burst', this, apparentSpecies, species.requiredItem);
@@ -1235,7 +1257,7 @@ export class Pokemon {
 			if (this.illusion) {
 				this.ability = ''; // Don't allow Illusion to wear off
 			}
-			this.setAbility(species.abilities['0'], null, true);
+			this.setAbility(species.abilities[abilitySlot], null, true);
 			this.baseAbility = this.ability;
 		}
 		return true;
@@ -1265,11 +1287,7 @@ export class Pokemon {
 		this.ability = this.baseAbility;
 		this.hpType = this.baseHpType;
 		this.hpPower = this.baseHpPower;
-		for (const i in this.volatiles) {
-			if (this.volatiles[i].linkedStatus) {
-				this.removeLinkedVolatiles(this.volatiles[i].linkedStatus, this.volatiles[i].linkedPokemon);
-			}
-		}
+		for (const i in this.volatiles) this.removeVolatile(i);
 		if (this.species.name === 'Eternatus-Eternamax' && this.volatiles.dynamax) {
 			this.volatiles = {dynamax: this.volatiles.dynamax};
 		} else {
@@ -1399,8 +1417,11 @@ export class Pokemon {
 		return d;
 	}
 
-	trySetStatus(status: string | Condition, source: Pokemon | null = null, sourceEffect: Effect | null = null) {
-		return this.setStatus(this.status || status, source, sourceEffect);
+	trySetStatus(
+		status: string | Condition, source: Pokemon | null = null,
+		sourceEffect: Effect | null = null, ignoreImmunities = false
+	) {
+		return this.setStatus(this.status || status, source, sourceEffect, ignoreImmunities);
 	}
 
 	/** Unlike clearStatus, gives cure message */
@@ -1498,11 +1519,16 @@ export class Pokemon {
 		if (!sourceEffect && this.battle.effect) sourceEffect = this.battle.effect;
 		if (!source && this.battle.event && this.battle.event.target) source = this.battle.event.target;
 		const item = this.getItem();
+		if (item.boosts && !this.canBoost(item)) return false;
 		if (
 			this.battle.runEvent('UseItem', this, null, null, item) &&
 			(force || this.battle.runEvent('TryEatItem', this, null, null, item))
 		) {
 			this.battle.add('-enditem', this, item, '[eat]');
+
+			if (item.boosts) {
+				this.battle.boost(item.boosts, this, source, item);
+			}
 
 			this.battle.singleEvent('Eat', item, this.itemData, this, source, sourceEffect);
 			this.battle.runEvent('EatItem', this, null, null, item);
@@ -1537,6 +1563,7 @@ export class Pokemon {
 		if (!sourceEffect && this.battle.effect) sourceEffect = this.battle.effect;
 		if (!source && this.battle.event && this.battle.event.target) source = this.battle.event.target;
 		const item = this.getItem();
+		if (item.boosts && !this.canBoost(item)) return false;
 		if (this.battle.runEvent('UseItem', this, null, null, item)) {
 			switch (item.id) {
 			case 'redcard':
@@ -1622,18 +1649,14 @@ export class Pokemon {
 	setAbility(ability: string | Ability, source?: Pokemon | null, isFromFormeChange?: boolean) {
 		if (!this.hp) return false;
 		if (typeof ability === 'string') ability = this.battle.dex.getAbility(ability);
-		const oldAbility = this.ability;
+		const oldAbility = this.getAbility();
 		if (!isFromFormeChange) {
-			const abilities = [
-				'battlebond', 'comatose', 'disguise', 'gulpmissile', 'hungerswitch', 'iceface', 'multitype', 'powerconstruct', 'rkssystem', 'schooling', 'shieldsdown', 'stancechange',
-			];
-			if (ability.id === 'illusion' || abilities.includes(ability.id) || abilities.includes(oldAbility)) return false;
-			if (this.battle.gen >= 7 && (ability.id === 'zenmode' || oldAbility === 'zenmode')) return false;
+			if (ability.locked === true || oldAbility.locked === true) return false;
 		}
 		if (!this.battle.runEvent('SetAbility', this, source, this.battle.effect, ability)) return false;
-		this.battle.singleEvent('End', this.battle.dex.getAbility(oldAbility), this.abilityData, this, source);
-		if (this.battle.effect && this.battle.effect.effectType === 'Move') {
-			this.battle.add('-endability', this, this.battle.dex.getAbility(oldAbility), '[from] move: ' +
+		this.battle.singleEvent('End', oldAbility, this.abilityData, this, source);
+		if (!isFromFormeChange && this.battle.effect && this.battle.effect.effectType === 'Move') {
+			this.battle.add('-endability', this, oldAbility, '[from] move: ' +
 				this.battle.dex.getMove(this.battle.effect.id));
 		}
 		this.ability = ability.id;
@@ -1725,17 +1748,16 @@ export class Pokemon {
 		return true;
 	}
 
-	getVolatile(status: string | Effect) {
-		status = this.battle.dex.getEffect(status) as Effect;
+	getVolatile(id: string) {
+		const status = this.battle.dex.getEffect(id);
 		if (!this.volatiles[status.id]) return null;
 		return status;
 	}
 
-	removeVolatile(status: string | Effect) {
-		if (!this.hp) return false;
+	removeVolatile(status: string | Effect, source: Pokemon | null = null, sourceEffect: Effect | null = null) {
 		status = this.battle.dex.getEffect(status) as Effect;
 		if (!this.volatiles[status.id]) return false;
-		this.battle.singleEvent('End', status, this.volatiles[status.id], this);
+		this.battle.singleEvent('End', status, this.volatiles[status.id], this, source, sourceEffect);
 		const linkedPokemon = this.volatiles[status.id].linkedPokemon;
 		const linkedStatus = this.volatiles[status.id].linkedStatus;
 		delete this.volatiles[status.id];
@@ -1758,11 +1780,12 @@ export class Pokemon {
 	}
 
 	getHealth = () => {
-		if (!this.hp) return {side: this.side.id, secret: '0 fnt', shared: '0 fnt'};
 		let secret = `${this.hp}/${this.maxhp}`;
 		let shared;
 		const ratio = this.hp / this.maxhp;
-		if (this.battle.reportExactHP) {
+		if (!this.hp) {
+			shared = secret = '0';
+		} else if (this.battle.reportExactHP) {
 			shared = secret;
 		} else if (this.battle.reportPercentages) {
 			// HP Percentage Mod mechanics
@@ -1884,6 +1907,9 @@ export class Pokemon {
 			let typeMod = this.battle.dex.getEffectiveness(move, type);
 			typeMod = this.battle.singleEvent('Effectiveness', move, null, this, type, move, typeMod);
 			totalTypeMod += this.battle.runEvent('Effectiveness', this, type, move, typeMod);
+			if (move.secondaryType) {
+				totalTypeMod += this.battle.dex.getEffectiveness(move.secondaryType, type);
+			}
 		}
 		return totalTypeMod;
 	}

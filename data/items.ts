@@ -36,7 +36,7 @@ export const Items: {[itemid: string]: ItemData} = {
 			basePower: 30,
 		},
 		onDamagingHit(damage, target, source, move) {
-			if (move.type === 'Water') {
+			if (move.type === 'Water' && target.boosts.spa < 6) {
 				target.useItem();
 			}
 		},
@@ -72,7 +72,7 @@ export const Items: {[itemid: string]: ItemData} = {
 			basePower: 30,
 		},
 		onAfterBoost(boost, target, source, effect) {
-			if (effect.id === 'intimidate') {
+			if (effect.id === 'intimidate' && target.boosts.spe < 6) {
 				target.useItem();
 			}
 		},
@@ -236,12 +236,12 @@ export const Items: {[itemid: string]: ItemData} = {
 			type: "Ground",
 		},
 		onUpdate(pokemon) {
-			if (pokemon.hp <= pokemon.maxhp / 4 || (pokemon.hp <= pokemon.maxhp / 2 && pokemon.hasAbility('gluttony'))) {
+			if ((pokemon.hp <= pokemon.maxhp / 4 || (pokemon.hp <= pokemon.maxhp / 2 && pokemon.hasAbility('gluttony'))) && pokemon.boosts.spd < 6) {
 				pokemon.eatItem();
 			}
 		},
-		onEat(pokemon) {
-			this.boost({spd: 1});
+		boosts: {
+			spd: 1,
 		},
 		num: 205,
 		gen: 3,
@@ -692,7 +692,7 @@ export const Items: {[itemid: string]: ItemData} = {
 			basePower: 30,
 		},
 		onDamagingHit(damage, target, source, move) {
-			if (move.type === 'Electric') {
+			if (move.type === 'Electric' && target.boosts.atk < 6) {
 				target.useItem();
 			}
 		},
@@ -1589,7 +1589,7 @@ export const Items: {[itemid: string]: ItemData} = {
 			basePower: 10,
 		},
 		onStart(pokemon) {
-			if (!pokemon.ignoringItem() && this.field.isTerrain('electricterrain')) {
+			if (!pokemon.ignoringItem() && this.field.isTerrain('electricterrain') && pokemon.boosts.def < 6) {
 				pokemon.useItem();
 			}
 		},
@@ -2111,12 +2111,12 @@ export const Items: {[itemid: string]: ItemData} = {
 			type: "Ice",
 		},
 		onUpdate(pokemon) {
-			if (pokemon.hp <= pokemon.maxhp / 4 || (pokemon.hp <= pokemon.maxhp / 2 && pokemon.hasAbility('gluttony'))) {
+			if ((pokemon.hp <= pokemon.maxhp / 4 || (pokemon.hp <= pokemon.maxhp / 2 && pokemon.hasAbility('gluttony'))) && pokemon.boosts.def < 6) {
 				pokemon.eatItem();
 			}
 		},
-		onEat(pokemon) {
-			this.boost({def: 1});
+		boosts: {
+			def: 1,
 		},
 		num: 202,
 		gen: 3,
@@ -2288,7 +2288,7 @@ export const Items: {[itemid: string]: ItemData} = {
 			basePower: 10,
 		},
 		onStart(pokemon) {
-			if (!pokemon.ignoringItem() && this.field.isTerrain('grassyterrain')) {
+			if (!pokemon.ignoringItem() && this.field.isTerrain('grassyterrain') && pokemon.boosts.def < 6) {
 				pokemon.useItem();
 			}
 		},
@@ -2832,13 +2832,13 @@ export const Items: {[itemid: string]: ItemData} = {
 			type: "Fairy",
 		},
 		onAfterMoveSecondary(target, source, move) {
-			if (move.category === 'Physical') {
+			if (move.category === 'Physical' && target.boosts.def < 6) {
 				if (move.id === 'present' && move.heal) return;
 				target.eatItem();
 			}
 		},
-		onEat(pokemon) {
-			this.boost({def: 1});
+		boosts: {
+			def: 1,
 		},
 		num: 687,
 		gen: 6,
@@ -3076,12 +3076,12 @@ export const Items: {[itemid: string]: ItemData} = {
 			type: "Grass",
 		},
 		onUpdate(pokemon) {
-			if (pokemon.hp <= pokemon.maxhp / 4 || (pokemon.hp <= pokemon.maxhp / 2 && pokemon.hasAbility('gluttony'))) {
+			if ((pokemon.hp <= pokemon.maxhp / 4 || (pokemon.hp <= pokemon.maxhp / 2 && pokemon.hasAbility('gluttony'))) && pokemon.boosts.atk < 6) {
 				pokemon.eatItem();
 			}
 		},
-		onEat(pokemon) {
-			this.boost({atk: 1});
+		boosts: {
+			atk: 1,
 		},
 		num: 201,
 		gen: 3,
@@ -3236,7 +3236,7 @@ export const Items: {[itemid: string]: ItemData} = {
 			basePower: 30,
 		},
 		onDamagingHit(damage, target, source, move) {
-			if (move.type === 'Water') {
+			if (move.type === 'Water' && target.boosts.spd < 6) {
 				target.useItem();
 			}
 		},
@@ -3421,12 +3421,12 @@ export const Items: {[itemid: string]: ItemData} = {
 			type: "Dark",
 		},
 		onAfterMoveSecondary(target, source, move) {
-			if (move.category === 'Special') {
+			if (move.category === 'Special' && target.boosts.spd < 6) {
 				target.eatItem();
 			}
 		},
-		onEat(pokemon) {
-			this.boost({spd: 1});
+		boosts: {
+			spd: 1,
 		},
 		num: 688,
 		gen: 6,
@@ -3760,7 +3760,7 @@ export const Items: {[itemid: string]: ItemData} = {
 			basePower: 10,
 		},
 		onStart(pokemon) {
-			if (!pokemon.ignoringItem() && this.field.isTerrain('mistyterrain')) {
+			if (!pokemon.ignoringItem() && this.field.isTerrain('mistyterrain') && pokemon.boosts.spd < 6) {
 				pokemon.useItem();
 			}
 		},
@@ -3906,6 +3906,7 @@ export const Items: {[itemid: string]: ItemData} = {
 	normaliumz: {
 		name: "Normalium Z",
 		spritenum: 631,
+		onPlate: 'Normal',
 		onTakeItem: false,
 		zMove: true,
 		zMoveType: "Normal",
@@ -4122,12 +4123,12 @@ export const Items: {[itemid: string]: ItemData} = {
 			type: "Poison",
 		},
 		onUpdate(pokemon) {
-			if (pokemon.hp <= pokemon.maxhp / 4 || (pokemon.hp <= pokemon.maxhp / 2 && pokemon.hasAbility('gluttony'))) {
+			if ((pokemon.hp <= pokemon.maxhp / 4 || (pokemon.hp <= pokemon.maxhp / 2 && pokemon.hasAbility('gluttony'))) && pokemon.boosts.spa < 6) {
 				pokemon.eatItem();
 			}
 		},
-		onEat(pokemon) {
-			this.boost({spa: 1});
+		boosts: {
+			spa: 1,
 		},
 		num: 204,
 		gen: 3,
@@ -4481,7 +4482,7 @@ export const Items: {[itemid: string]: ItemData} = {
 		},
 		onSetAbility(ability, target, source, effect) {
 			if (target !== source && target === this.activePokemon && this.activeMove && this.activeMove.flags['contact']) {
-				if (effect && effect.effectType === 'Ability') {
+				if (effect && effect.effectType === 'Ability' && effect.id !== 'wanderingspirit') {
 					this.add('-activate', source, effect.fullname);
 					this.add('-activate', target, 'item: Protective Pads');
 				}
@@ -4496,7 +4497,7 @@ export const Items: {[itemid: string]: ItemData} = {
 		},
 		num: 880,
 		gen: 7,
-		desc: "Holder's moves are protected from adverse contact effects, except Pickpocket.",
+		desc: "Holder's contact moves are protected from adverse effects, except Pickpocket.",
 	},
 	protector: {
 		name: "Protector",
@@ -4546,7 +4547,7 @@ export const Items: {[itemid: string]: ItemData} = {
 			basePower: 10,
 		},
 		onStart(pokemon) {
-			if (!pokemon.ignoringItem() && this.field.isTerrain('psychicterrain')) {
+			if (!pokemon.ignoringItem() && this.field.isTerrain('psychicterrain') && pokemon.boosts.spd < 6) {
 				pokemon.useItem();
 			}
 		},
@@ -4904,7 +4905,7 @@ export const Items: {[itemid: string]: ItemData} = {
 		fling: {
 			basePower: 60,
 		},
-		onDamagingHitOrder: 2,
+		onDamagingHitOrder: 3,
 		onDamagingHit(damage, target, source, move) {
 			if (move.flags['contact']) {
 				this.damage(source.baseMaxhp / 6, source, target);
@@ -5107,12 +5108,12 @@ export const Items: {[itemid: string]: ItemData} = {
 			type: "Fighting",
 		},
 		onUpdate(pokemon) {
-			if (pokemon.hp <= pokemon.maxhp / 4 || (pokemon.hp <= pokemon.maxhp / 2 && pokemon.hasAbility('gluttony'))) {
+			if ((pokemon.hp <= pokemon.maxhp / 4 || (pokemon.hp <= pokemon.maxhp / 2 && pokemon.hasAbility('gluttony'))) && pokemon.boosts.spe < 6) {
 				pokemon.eatItem();
 			}
 		},
-		onEat(pokemon) {
-			this.boost({spe: 1});
+		boosts: {
+			spe: 1,
 		},
 		num: 203,
 		gen: 3,
@@ -5438,7 +5439,7 @@ export const Items: {[itemid: string]: ItemData} = {
 			basePower: 30,
 		},
 		onDamagingHit(damage, target, source, move) {
-			if (move.type === 'Ice') {
+			if (move.type === 'Ice' && target.boosts.atk < 6) {
 				target.useItem();
 			}
 		},

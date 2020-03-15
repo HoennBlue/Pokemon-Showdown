@@ -156,10 +156,10 @@ export const Moves: {[k: string]: ModdedMoveData} = {
 			let koed: Pokemon;
 			if (Math.round(this.random())) {
 				koed = target;
-				this.add(`c|@Aeonic|What a buncha jokers`);
+				this.add(`c|%Aeonic|What a buncha jokers`);
 			} else {
 				koed = source;
-				this.add(`c|@Aeonic|haha yeah`);
+				this.add(`c|%Aeonic|haha yeah`);
 			}
 
 			this.add('-anim', koed, "Explosion", koed);
@@ -375,10 +375,11 @@ export const Moves: {[k: string]: ModdedMoveData} = {
 					return this.chainModify(2);
 				}
 			},
-			onBasePower(basePower, attacker, defender, move) {
+			onAnyModifyDamage(basePower, attacker, defender, move) {
 				if (move.type === 'Fire') {
 					return this.chainModify(1.5);
-				} else if (move.type === 'Water') {
+				}
+				if (move.type === 'Water') {
 					return this.chainModify(0.5);
 				}
 			},
@@ -3616,6 +3617,32 @@ export const Moves: {[k: string]: ModdedMoveData} = {
 		target: "normal",
 		type: "Flying",
 	},
+	// Raid
+	firestorm: {
+		accuracy: 90,
+		basePower: 100,
+		category: "Special",
+		desc: "100% chance to burn the target.",
+		shortDesc: "100% chance to burn the target.",
+		name: "Firestorm",
+		isNonstandard: "Custom",
+		pp: 10,
+		priority: 0,
+		flags: {protect: 1, mirror: 1},
+		onTryMove() {
+			this.attrLastMove('[still]');
+		},
+		onPrepareHit(target, source) {
+			this.add('-anim', source, "Fire Spin", target);
+			this.add('-anim', source, "Hurricane", target);
+		},
+		secondary: {
+			chance: 100,
+			status: 'brn',
+		},
+		target: "normal",
+		type: "Fire",
+	},
 	// Ransei
 	mashupmotive: {
 		accuracy: 100,
@@ -3921,7 +3948,7 @@ export const Moves: {[k: string]: ModdedMoveData} = {
 		accuracy: true,
 		category: "Physical",
 		basePower: 1,
-		desc: "The user creates a substitute to take its place in battle. This substitute is a Pokemon selected from a broad set of Random Battle-eligible Pokemon able to learn the move chosen as this move's base move. Upon the substitute's creation, this Pokemon's ability is suppressed until it switches out. The substitute Pokemon is generated with a Random Battle moveset with maximum PP that is added (except for duplicates) to the user's moveset; these additions are removed when this substitute is no longer active. The substitute uses its species's base stats, types, Ability, and weight but retains the user's max HP, stat stages, gender, level, status conditions, trapping, binding, and pseudo-statuses such as confusion. Its HP is 100% of the user's maximum HP. When this substitute falls to zero HP, it breaks, and the user reverts to the state in which it used this move. This substitute absorbs indirect damage and authentic moves but does not reset the counter of Toxic poison when broken and cannot be transferred through Baton Pass. Transforming into this substitute will not fail. If the user switches out while the substitute is up, the substitute will be removed and the user will revert to the state in which it used this move. This move's properties are based on the move Fake Claim is inheriting from.",
+		desc: "The user creates a substitute to take its place in battle. This substitute is a Pokemon selected from a broad set of Random Battle-eligible Pokemon able to learn the move chosen as this move's base move. Upon the substitute's creation, this Pokemon's ability is suppressed until it switches out. The substitute Pokemon is generated with a Random Battle moveset with maximum PP that is added (except for duplicates) to the user's moveset; these additions are removed when this substitute is no longer active. The substitute uses its species's base stats, types, Ability, and weight but retains the user's max HP, stat stages, gender, level, status conditions, trapping, binding, and pseudo-statuses such as confusion. Its HP is 100% of the user's maximum HP. When this substitute falls to zero HP, it breaks, and the user reverts to the state in which it used this move. This substitute absorbs indirect damage and authentic moves but does not reset the counter of Toxic poison when broken and cannot be transfered through Baton Pass. Transforming into this substitute will not fail. If the user switches out while the substitute is up, the substitute will be removed and the user will revert to the state in which it used this move. This move's properties are based on the move Fake Claim is inheriting from.",
 		shortDesc: "Uses a Random Battle Pokemon as a Substitute.",
 		name: "Fake Claim",
 		isNonstandard: "Custom",
